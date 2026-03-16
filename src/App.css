@@ -66,3 +66,14 @@ button.add-to-cart, .btn-primary {
   border-radius: 5px;
 }
 /* --- ডিজাইন শেষ --- */
+.app-container { font-family: 'Arial', sans-serif; background: #f9f9f9; min-height: 100vh; }
+.main-header { background: #28a745; color: white; padding: 15px; display: flex; justify-content: space-between; position: sticky; top: 0; z-index: 1000; }
+.cart-badge span { background: red; border-radius: 50%; padding: 2px 6px; font-size: 12px; }
+.product-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
+.product-card { background: white; padding: 10px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
+.product-card img { width: 100px; height: 100px; object-fit: cover; }
+.add-btn { background: #28a745; color: white; border: none; padding: 8px; border-radius: 5px; width: 100%; cursor: pointer; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; height: 60px; display: flex; justify-content: space-around; align-items: center; border-top: 1px solid #ddd; z-index: 1000; }
+.nav-item { cursor: pointer; color: #666; }
+.nav-item.active { color: #28a745; font-weight: bold; }
+.content { padding-bottom: 70px; }
