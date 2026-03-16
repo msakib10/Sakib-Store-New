@@ -1,5 +1,8 @@
-name: Color My Sakib Store
-on: push
+name: Success Build Sakib Store
+on:
+  push:
+    branches:
+      - main  # আপনি যখনই মেইন ব্রাঞ্চে পরিবর্তন সেভ করবেন তখনই কাজ শুরু হবে
 
 jobs:
   build:
@@ -19,28 +22,46 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install & Build Your Design
+      - name: Install & Build Your Green Design
         run: |
           npm install --force
-          # এটি আপনার আসল CSS/React ডিজাইনকে বিল্ড করবে
+          # এটি আপনার App.jsx এবং App.css এর ডিজাইনকে বিল্ড করবে
           npm run build 
 
-      - name: Move Design to Android
+      - name: Prepare Android Assets
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android --force
-          # পুরোনো সাদা ডিজাইন মুছে নতুন ডিজাইন ঢোকানো
+          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --force
+          # পুরোনো বিল্ড মুছে ফ্রেশ বিল্ড তৈরি করা
           rm -rf android
           npx cap add android
           npx cap sync android
 
-      - name: Final Colorful APK Build
+      - name: Set App Icon (icon.png)
+        run: |
+          # যদি আপনি icon.png আপলোড করে থাকেন তবে এটি আইকন সেট করবে
+          if [ -f "icon.png" ]; then
+            mkdir -p android/app/src/main/res/mipmap-mdpi
+            mkdir -p android/app/src/main/res/mipmap-hdpi
+            mkdir -p android/app/src/main/res/mipmap-xhdpi
+            mkdir -p android/app/src/main/res/mipmap-xxhdpi
+            mkdir -p android/app/src/main/res/mipmap-xxxhdpi
+            cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          else
+            echo "Icon file not found, using default."
+          fi
+
+      - name: Build Final APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
           
-      - name: Download Colorful APK
+      - name: Download Your Green Sakib Store APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Real-Design
+          name: SakibStore-v2-Green
           path: android/app/build/outputs/apk/debug/app-debug.apk
