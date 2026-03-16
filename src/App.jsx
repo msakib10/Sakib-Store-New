@@ -1,58 +1,60 @@
 import React, { useState } from 'react';
 import './App.css';
 
+const demoProducts = [
+  { id: 1, name: "চিনি (১ কেজি)", price: 140, img: "https://via.placeholder.com/150" },
+  { id: 2, name: "মসুর ডাল", price: 120, img: "https://via.placeholder.com/150" },
+  { id: 3, name: "সয়াবিন তেল", price: 180, img: "https://via.placeholder.com/150" },
+];
+
 function App() {
+  const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
+
+  const addToCart = (product) => {
+    setCart([...cart, product]);
+  };
 
   return (
     <div className="app-container">
-      {/* হেডার - ২ নং ছবির মতো সবুজ */}
+      {/* হেডার যেখানে কার্ডের সংখ্যা দেখা যাবে */}
       <header className="main-header">
-        <div className="header-content">
-          <h1>Sakib Store</h1>
-          <div className="search-bar">
-            <input type="text" placeholder="Search products..." />
-          </div>
+        <h1>সাকিব স্টোর</h1>
+        <div className="cart-icon">
+          🛒 <span>{cart.length}</span>
         </div>
       </header>
 
-      {/* মেইন কন্টেন্ট */}
       <main className="content">
-        <div className="product-grid">
-          {/* এখানে আপনার পণ্যের লিস্ট থাকবে */}
-          <div className="product-card">
-            <img src="https://via.placeholder.com/150" alt="Product" />
-            <h3>Fresh Sugar</h3>
-            <p>৳ 120</p>
-            <button className="add-btn">Add to Cart</button>
+        {activeTab === 'home' && (
+          <div className="product-grid">
+            {demoProducts.map(product => (
+              <div key={product.id} className="product-card">
+                <img src={product.img} alt={product.name} />
+                <h3>{product.name}</h3>
+                <p>৳ {product.price}</p>
+                <button onClick={() => addToCart(product)} className="add-btn">
+                  কার্টে যোগ করুন
+                </button>
+              </div>
+            ))}
           </div>
-          {/* আরও প্রোডাক্ট... */}
-        </div>
+        )}
+        
+        {activeTab === 'cart' && (
+          <div className="cart-details">
+            <h2>আপনার কার্ডে থাকা পণ্য:</h2>
+            {cart.length === 0 ? <p>কার্ড খালি!</p> : 
+              cart.map((item, index) => <p key={index}>{item.name} - ৳{item.price}</p>)
+            }
+          </div>
+        )}
       </main>
 
-      {/* ২ নং ছবির মতো ফিক্সড বটম নেভিগেশন */}
       <nav className="bottom-nav">
-        <div 
-          className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} 
-          onClick={() => setActiveTab('home')}
-        >
-          <span className="icon">🏠</span>
-          <span className="label">Home</span>
-        </div>
-        <div 
-          className={`nav-item ${activeTab === 'category' ? 'active' : ''}`} 
-          onClick={() => setActiveTab('category')}
-        >
-          <span className="icon">📂</span>
-          <span className="label">Category</span>
-        </div>
-        <div 
-          className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} 
-          onClick={() => setActiveTab('profile')}
-        >
-          <span className="icon">👤</span>
-          <span className="label">Profile</span>
-        </div>
+        <button onClick={() => setActiveTab('home')}>🏠 হোম</button>
+        <button onClick={() => setActiveTab('cart')}>📦 কার্ড ({cart.length})</button>
+        <button onClick={() => setActiveTab('profile')}>👤 প্রোফাইল</button>
       </nav>
     </div>
   );
