@@ -9,3 +9,60 @@
 .price { color: #388e3c; font-weight: bold; font-size: 18px; }
 .add-btn { background: #ff9f00; border: none; color: white; padding: 8px; width: 100%; border-radius: 4px; font-weight: bold; cursor: pointer; }
 .bottom-nav { position: fixed; bottom: 0; width: 100%; background: white; display: flex; justify-content: space-around; padding: 10px 0; border-top: 1px solid #ddd; }
+/* --- সাকিব স্টোর কাস্টম ডিজাইন শুরু --- */
+
+/* হেডারকে স্থির এবং সবুজ করা */
+header, .header-container {
+  background-color: #28a745 !important; /* সবুজ রঙ */
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  padding: 10px;
+}
+
+/* নিচের মেনু (Bottom Navigation) ২ নং ছবির মতো স্থির করা */
+.bottom-nav, footer.nav-bar {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0;
+  right: 0;
+  height: 65px;
+  background-color: #ffffff;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  border-top: 1px solid #eee;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+  z-index: 9999;
+}
+
+/* মেনুর আইকন ও টেক্সট স্টাইল */
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-decoration: none;
+  color: #666; /* সাধারণ আইকন রঙ */
+}
+
+.nav-item.active, .nav-item:hover {
+  color: #28a745; /* সক্রিয় থাকলে সবুজ */
+}
+
+.nav-item img, .nav-item i {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+/* মেইন কন্টেন্ট যেন মেনুর নিচে চাপা না পড়ে */
+main, .content-body {
+  padding-bottom: 80px !important;
+}
+
+/* বাটনগুলো সবুজ করা */
+button.add-to-cart, .btn-primary {
+  background-color: #28a745 !important;
+  border: none;
+  border-radius: 5px;
+}
+/* --- ডিজাইন শেষ --- */
