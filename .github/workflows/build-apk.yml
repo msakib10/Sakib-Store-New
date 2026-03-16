@@ -1,4 +1,4 @@
-name: Ultimate Sakib Store Fix
+name: Sakib Store Final Success Build
 on: push
 
 jobs:
@@ -8,32 +8,36 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Setup Node and Java
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: actions/setup-java@v4
+          
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install and Build Web
+      - name: Install Dependencies and Build Web
         run: |
           npm install --force
           npm run build
 
-      - name: 🛠️ অ্যান্ড্রয়েড ফোল্ডার ও লোগো ফিক্স
+      - name: 🛠️ Android and Logo Setup
         run: |
-          # ক্যাপাসিটর অ্যান্ড্রয়েড সেটআপ
-          npm install @capacitor/android --force
-          npx cap add android || true
+          # সব প্রয়োজনীয় লাইব্রেরি গ্লোবালি ইনস্টল করা যাতে এরর না দেয়
+          npm install -g @capacitor/cli @capacitor/core @capacitor/android
           
-          # আপনার লোগো ফাইলটি খুঁজে বের করা
-          ICON_FILE=$(find . -maxdepth 1 -name "Logopit*.png" | head -n 1)
+          # অ্যান্ড্রয়েড প্রোজেক্ট তৈরি বা আপডেট
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
           
-          if [ -n "$ICON_FILE" ]; then
+          # আপনার লোগো ফাইলটি সঠিক জায়গায় কপি করা
+          ICON_FILE="Logopit_1772536689111.png"
+          if [ -f "$ICON_FILE" ]; then
             echo "Icon Found: $ICON_FILE"
-            # অ্যান্ড্রয়েডের সব রিসোর্স ফোল্ডারে লোগোটি কপি করা
             declare -a folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
             for f in "${folders[@]}"; do
               mkdir -p android/app/src/main/res/$f
@@ -43,18 +47,16 @@ jobs:
             done
           fi
           
-          # সিঙ্ক করা
           npx cap sync android
 
       - name: 🏗️ Build APK
         run: |
           cd android
-          # গ্র্যাডল পারমিশন ফিক্স
           chmod +x gradlew
           ./gradlew assembleDebug
           
       - name: 📥 Download Branded APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Fixed-Final
+          name: SakibStore-Success-v1
           path: android/app/build/outputs/apk/debug/app-debug.apk
