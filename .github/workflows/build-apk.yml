@@ -1,4 +1,4 @@
-name: Build Sakib Store APK
+name: Success Build Sakib Store
 on:
   push:
     branches:
@@ -27,28 +27,23 @@ jobs:
           npm install --force
           npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --force
 
-      - name: Build Web Assets
+      - name: Build Assets & Sync
         run: |
-          mkdir -p dist
-          echo "<html><body>Sakib Store Mobile App</body></html>" > dist/index.html
-
-      - name: Repair and Sync Capacitor
-        run: |
-          # যদি android ফোল্ডার না থাকে তবে নতুন করে তৈরি করবে
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
+          mkdir -p dist && echo "<html><body>Sakib Store</body></html>" > dist/index.html
+          # অ্যান্ড্রয়েড ফোল্ডারটি ফ্রেশ ভাবে তৈরি করা
+          rm -rf android
+          npx cap add android
           npx cap sync android
 
-      - name: Final APK Build
+      - name: Final Build Execution
         run: |
-          # আপনার রিপোজিটরির সঠিক ফোল্ডারে ঢোকা
+          # সঠিক ফোল্ডার লোকেশনে গিয়ে গ্র্যাডল রান করা
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
           
-      - name: Upload Finished APK
+      - name: Download Your APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Success-APK
+          name: SakibStore-Mobile-App
           path: android/app/build/outputs/apk/debug/app-debug.apk
