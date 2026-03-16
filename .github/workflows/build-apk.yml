@@ -1,0 +1,58 @@
+name: Success Sakib Store APK
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Dependencies
+        run: |
+          npm install --force
+          npm install @capacitor/core @capacitor/cli @capacitor/android --force
+
+      - name: Initialize App Config
+        run: |
+          if [ ! -f capacitor.config.json ]; then
+            echo '{"appId": "com.sakib.store", "appName": "Sakib Store", "webDir": "dist", "bundledWebRuntime": false}' > capacitor.config.json
+          fi
+          mkdir -p dist
+          echo "<html><body>Sakib Store Mobile App</body></html>" > dist/index.html
+
+      - name: Create Android Folder & Sync
+        run: |
+          npx cap add android || true
+          npx cap sync android
+
+      - name: Final Build APK
+        working-directory: ./android
+        run: |
+          # ডুপ্লিকেট ক্লাস সমস্যার চূড়ান্ত সমাধান
+          echo "android.useAndroidX=true" >> gradle.properties
+          echo "android.enableJetifier=true" >> gradle.properties
+          
+          # ফাইল পারমিশন এবং বিল্ড
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload Finished APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SakibStore-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
