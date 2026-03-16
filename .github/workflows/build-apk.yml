@@ -39,17 +39,17 @@ jobs:
       - name: Set App Icon (icon.png)
         run: |
           # যদি আপনি icon.png আপলোড করে থাকেন তবে এটি আইকন সেট করবে
-          if [ -f "icon.png" ]; then
+          if [ -f "Logopit_1772536689111.png" ]; then
             mkdir -p android/app/src/main/res/mipmap-mdpi
             mkdir -p android/app/src/main/res/mipmap-hdpi
             mkdir -p android/app/src/main/res/mipmap-xhdpi
             mkdir -p android/app/src/main/res/mipmap-xxhdpi
             mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-            cp icon.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp icon.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp icon.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp icon.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp icon.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
           else
             echo "Icon file not found, using default."
           fi
