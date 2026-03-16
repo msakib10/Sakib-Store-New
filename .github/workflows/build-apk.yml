@@ -1,4 +1,4 @@
-name: Sakib Store Guaranteed Success
+name: Final Success Build Sakib Store
 on: push
 
 jobs:
@@ -19,20 +19,19 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install and Build Web
+      - name: 🛠️ Clean and Build Web
         run: |
           npm install --force
           npm run build
 
-      - name: 🛠️ Android and Logo Fix
+      - name: 📱 Android and Logo Setup
         run: |
-          # সব প্রয়োজনীয় ডিপেন্ডেন্সি লোকালি ইনস্টল করা
+          # পুরোনো অ্যান্ড্রয়েড ফোল্ডার মুছে নতুন করে তৈরি করা যাতে এরর না আসে
+          rm -rf android
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --force
+          npx cap add android
           
-          # অ্যান্ড্রয়েড প্ল্যাটফর্ম সিঙ্ক করা
-          npx cap add android || true
-          
-          # লোগো সেট করা
+          # আপনার লোগো ফাইলটি সরাসরি সঠিক জায়গায় কপি করা
           ICON_FILE="Logopit_1772536689111.png"
           if [ -f "$ICON_FILE" ]; then
             echo "Icon Found: $ICON_FILE"
