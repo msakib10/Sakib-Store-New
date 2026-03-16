@@ -1,8 +1,5 @@
-name: Success Build Sakib Store
-on:
-  push:
-    branches:
-      - main
+name: Color My Sakib Store
+on: push
 
 jobs:
   build:
@@ -22,28 +19,28 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install Dependencies
+      - name: Install & Build Your Design
         run: |
           npm install --force
-          npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --force
+          # এটি আপনার আসল CSS/React ডিজাইনকে বিল্ড করবে
+          npm run build 
 
-      - name: Build Assets & Sync
+      - name: Move Design to Android
         run: |
-          mkdir -p dist && echo "<html><body>Sakib Store</body></html>" > dist/index.html
-          # অ্যান্ড্রয়েড ফোল্ডারটি ফ্রেশ ভাবে তৈরি করা
+          npm install @capacitor/core @capacitor/cli @capacitor/android --force
+          # পুরোনো সাদা ডিজাইন মুছে নতুন ডিজাইন ঢোকানো
           rm -rf android
           npx cap add android
           npx cap sync android
 
-      - name: Final Build Execution
+      - name: Final Colorful APK Build
         run: |
-          # সঠিক ফোল্ডার লোকেশনে গিয়ে গ্র্যাডল রান করা
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
           
-      - name: Download Your APK
+      - name: Download Colorful APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Mobile-App
+          name: SakibStore-Real-Design
           path: android/app/build/outputs/apk/debug/app-debug.apk
