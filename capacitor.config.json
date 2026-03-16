@@ -1,0 +1,6 @@
+{
+  "appId": "com.sakib.store",
+  "appName": "Sakib Store",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
