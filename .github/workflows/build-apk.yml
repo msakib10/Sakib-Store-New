@@ -34,19 +34,21 @@ jobs:
           npx cap add android
           npx cap sync android
 
-      - name: 🛠️ জবরদস্তি লোগো সেট করা (Icon Fix)
+      - name: 🛠️ লোগো সেট করা (Logopit Name Fix)
         run: |
-          # icon.png ফাইলটি খুঁজে বের করে সব অ্যান্ড্রয়েড ফোল্ডারে কপি করা
-          if [ -f "icon.png" ]; then
+          # আপনার ফাইলের নাম Logopit_1772536689111.png ব্যবহার করে আইকন সেট করা
+          TARGET_ICON="Logopit_1772536689111.png"
+          
+          if [ -f "$TARGET_ICON" ]; then
             declare -a res_folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
             for folder in "${res_folders[@]}"; do
               mkdir -p android/app/src/main/res/$folder
-              cp icon.png android/app/src/main/res/$folder/ic_launcher.png
-              cp icon.png android/app/src/main/res/$folder/ic_launcher_round.png
+              cp "$TARGET_ICON" android/app/src/main/res/$folder/ic_launcher.png
+              cp "$TARGET_ICON" android/app/src/main/res/$folder/ic_launcher_round.png
             done
-            echo "Logo updated successfully!"
+            echo "Logo updated successfully using $TARGET_ICON!"
           else
-            echo "Error: icon.png not found in root directory!"
+            echo "Error: $TARGET_ICON not found in GitHub!"
             exit 1
           fi
 
@@ -56,8 +58,8 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
           
-      - name: Download Updated APK
+      - name: Download Your Branded APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Icon-Fixed
+          name: SakibStore-Branded-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
