@@ -1,8 +1,8 @@
-name: Success Build Sakib Store
+name: Sakib Store Final Build
 on:
   push:
     branches:
-      - main  # আপনি যখনই মেইন ব্রাঞ্চে পরিবর্তন সেভ করবেন তখনই কাজ শুরু হবে
+      - main
 
 jobs:
   build:
@@ -22,46 +22,42 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Install & Build Your Green Design
+      - name: Build Web Assets
         run: |
           npm install --force
-          # এটি আপনার App.jsx এবং App.css এর ডিজাইনকে বিল্ড করবে
           npm run build 
 
-      - name: Prepare Android Assets
+      - name: Capacitor Sync
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --force
-          # পুরোনো বিল্ড মুছে ফ্রেশ বিল্ড তৈরি করা
           rm -rf android
           npx cap add android
           npx cap sync android
 
-      - name: Set App Icon (icon.png)
+      - name: 🛠️ জবরদস্তি লোগো সেট করা (Icon Fix)
         run: |
-          # যদি আপনি icon.png আপলোড করে থাকেন তবে এটি আইকন সেট করবে
-          if [ -f "Logopit_1772536689111.png" ]; then
-            mkdir -p android/app/src/main/res/mipmap-mdpi
-            mkdir -p android/app/src/main/res/mipmap-hdpi
-            mkdir -p android/app/src/main/res/mipmap-xhdpi
-            mkdir -p android/app/src/main/res/mipmap-xxhdpi
-            mkdir -p android/app/src/main/res/mipmap-xxxhdpi
-            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
-            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
-            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
-            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
-            cp Logopit_1772536689111.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          # icon.png ফাইলটি খুঁজে বের করে সব অ্যান্ড্রয়েড ফোল্ডারে কপি করা
+          if [ -f "icon.png" ]; then
+            declare -a res_folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
+            for folder in "${res_folders[@]}"; do
+              mkdir -p android/app/src/main/res/$folder
+              cp icon.png android/app/src/main/res/$folder/ic_launcher.png
+              cp icon.png android/app/src/main/res/$folder/ic_launcher_round.png
+            done
+            echo "Logo updated successfully!"
           else
-            echo "Icon file not found, using default."
+            echo "Error: icon.png not found in root directory!"
+            exit 1
           fi
 
-      - name: Build Final APK
+      - name: Final APK Build
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
           
-      - name: Download Your Green Sakib Store APK
+      - name: Download Updated APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-v2-Green
+          name: SakibStore-Icon-Fixed
           path: android/app/build/outputs/apk/debug/app-debug.apk
