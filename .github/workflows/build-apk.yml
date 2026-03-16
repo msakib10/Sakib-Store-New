@@ -1,4 +1,4 @@
-name: Final Logo Fix Build
+name: Final Logo Fix Sakib Store
 on: push
 
 jobs:
@@ -25,21 +25,25 @@ jobs:
       - name: Capacitor Sync
         run: |
           npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --force
-          rm -rf android
-          npx cap add android
+          npx cap add android || true
           npx cap sync android
 
-      - name: 🛠️ Force Set Logo
+      - name: 🛠️ লোগো সেট করা (Universal Fix)
         run: |
-          # আপনার ফাইলের আসল নাম ব্যবহার করা হয়েছে
-          ICON="Logopit_1772536689111.png"
-          if [ -f "$ICON" ]; then
+          # Logopit দিয়ে শুরু হওয়া যেকোনো .png ফাইল খুঁজে বের করবে
+          ICON_FILE=$(find . -maxdepth 1 -name "Logopit*.png" | head -n 1)
+          
+          if [ -n "$ICON_FILE" ]; then
+            echo "Found Icon: $ICON_FILE"
             declare -a folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
             for f in "${folders[@]}"; do
               mkdir -p android/app/src/main/res/$f
-              cp "$ICON" android/app/src/main/res/$f/ic_launcher.png
-              cp "$ICON" android/app/src/main/res/$f/ic_launcher_round.png
+              cp "$ICON_FILE" android/app/src/main/res/$f/ic_launcher.png
+              cp "$ICON_FILE" android/app/src/main/res/$f/ic_launcher_round.png
             done
+          else
+            echo "Error: Logo file starting with Logopit not found!"
+            exit 1
           fi
 
       - name: Build APK
@@ -51,5 +55,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Success
+          name: SakibStore-Branded-Final
           path: android/app/build/outputs/apk/debug/app-debug.apk
