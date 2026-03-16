@@ -27,28 +27,28 @@ jobs:
           npm install --force
           npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/android@latest --force
 
-      - name: Build Web & Sync
+      - name: Build Web Assets
         run: |
-          mkdir -p dist && echo "<html><body>Sakib Store</body></html>" > dist/index.html
-          npx cap add android || true
+          mkdir -p dist
+          echo "<html><body>Sakib Store Mobile App</body></html>" > dist/index.html
+
+      - name: Repair and Sync Capacitor
+        run: |
+          # যদি android ফোল্ডার না থাকে তবে নতুন করে তৈরি করবে
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
           npx cap sync android
 
-      - name: Build Final APK (Fixed Path)
+      - name: Final APK Build
         run: |
-          # যদি অ্যান্ড্রয়েড ফোল্ডার থাকে তবেই বিল্ড শুরু হবে
-          if [ -d "android" ]; then
-            cd android
-            # ফাইলের পারমিশন ঠিক করা
-            chmod +x gradlew
-            # সরাসরি বিল্ড কমান্ড রান করা
-            ./gradlew assembleDebug --stacktrace
-          else
-            echo "Error: Android directory not found!"
-            exit 1
-          fi
+          # আপনার রিপোজিটরির সঠিক ফোল্ডারে ঢোকা
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
           
-      - name: Upload APK
+      - name: Upload Finished APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Success
+          name: SakibStore-Success-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
