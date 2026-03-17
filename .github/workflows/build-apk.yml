@@ -1,4 +1,4 @@
-name: Final Success Build Sakib Store
+name: Final Online Build Fix
 on: push
 
 jobs:
@@ -8,7 +8,7 @@ jobs:
       - name: Checkout Source
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -19,31 +19,36 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: 🛠️ Clean and Build Web
+      - name: 🛠️ Install Dependencies & Build Web
         run: |
+          # ইমেজ প্রসেসিং এবং ফায়ারবেস ইনস্টল নিশ্চিত করা
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          
+          # ফায়ারবেস ও অন্যান্য মডিউল সরাসরি ইনস্টল করা
+          npm install --save firebase --force
+          npm install --save-dev @capacitor/core @capacitor/cli @capacitor/android --force
           npm install --force
+          
+          # এখন বিল্ড করা (যা আগে ফেইল হয়েছিল)
           npm run build
 
-      - name: 📱 Android and Logo Setup
+      - name: 📱 Android Logo & Fix
         run: |
-          # পুরোনো অ্যান্ড্রয়েড ফোল্ডার মুছে নতুন করে তৈরি করা যাতে এরর না আসে
           rm -rf android
-          npm install @capacitor/core @capacitor/cli @capacitor/android --save-dev --force
           npx cap add android
           
-          # আপনার লোগো ফাইলটি সরাসরি সঠিক জায়গায় কপি করা
           ICON_FILE="Logopit_1772536689111.png"
           if [ -f "$ICON_FILE" ]; then
-            echo "Icon Found: $ICON_FILE"
+            convert "$ICON_FILE" -resize 80% -background none -gravity center -extent 100% padded_icon.png
             declare -a folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
             for f in "${folders[@]}"; do
               mkdir -p android/app/src/main/res/$f
-              cp "$ICON_FILE" android/app/src/main/res/$f/ic_launcher.png
-              cp "$ICON_FILE" android/app/src/main/res/$f/ic_launcher_round.png
-              cp "$ICON_FILE" android/app/src/main/res/$f/ic_launcher_foreground.png
+              cp padded_icon.png android/app/src/main/res/$f/ic_launcher.png
+              cp padded_icon.png android/app/src/main/res/$f/ic_launcher_round.png
+              cp padded_icon.png android/app/src/main/res/$f/ic_launcher_foreground.png
             done
           fi
-          
           npx cap sync android
 
       - name: 🏗️ Build APK
@@ -55,5 +60,5 @@ jobs:
       - name: 📥 Download Branded APK
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Success-Final
+          name: SakibStore-Online-Fixed
           path: android/app/build/outputs/apk/debug/app-debug.apk
