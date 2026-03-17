@@ -1,48 +1,82 @@
+
 import React, { useState, useEffect } from 'react';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, addDoc } from "firebase/firestore";
 import './App.css';
 
-// ডেমো পণ্য তালিকা (পরে এটি অনলাইন ডাটাবেস থেকে আসবে)
-const demoProducts = [
-  { id: 1, name: "চিনি (১ কেজি)", price: 140, img: "https://via.placeholder.com/100" },
-  { id: 2, name: "মসুর ডাল (১ কেজি)", price: 120, img: "https://via.placeholder.com/100" },
-  { id: 3, name: "সয়াবিন তেল (১ লিটার)", price: 180, img: "https://via.placeholder.com/100" },
-];
+// আপনার ফায়ারবেস কনফিগারেশন
+const firebaseConfig = {
+  apiKey: "AIzaSyBSKT8knhfyLHSuz-Z8nnj3jrYn2KBcP0M",
+  authDomain: "sakib-store1.firebaseapp.com",
+  projectId: "sakib-store1",
+  storageBucket: "sakib-store1.firebasestorage.app",
+  messagingSenderId: "514373347826",
+  appId: "1:514373347826:web:a778be5386cd5362d1636b",
+  measurementId: "G-8PKWB3DK2Y"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 function App() {
+  const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState('home');
 
-  // কার্টে পণ্য যোগ করা বা সংখ্যা বাড়ানো
-  const addToCart = (product) => {
-    const existing = cart.find(item => item.id === product.id);
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "products"));
+        const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setProducts(items);
+      } catch (e) {
+        console.error("পণ্য লোড করতে সমস্যা:", e);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  const addToCart = (p) => {
+    const existing = cart.find(item => item.id === p.id);
     if (existing) {
-      setCart(cart.map(item => 
-        item.id === product.id ? { ...item, qty: item.qty + 1 } : item
-      ));
+      setCart(cart.map(item => item.id === p.id ? { ...item, qty: item.qty + 1 } : item));
     } else {
-      setCart([...cart, { ...product, qty: 1 }]);
+      setCart([...cart, { ...p, qty: 1 }]);
     }
   };
 
-  // সংখ্যা কমানো বা রিমুভ করা
-  const removeFromCart = (productId) => {
-    const existing = cart.find(item => item.id === productId);
+  const removeFromCart = (id) => {
+    const existing = cart.find(item => item.id === id);
     if (existing.qty === 1) {
-      setCart(cart.filter(item => item.id !== productId));
+      setCart(cart.filter(item => item.id !== id));
     } else {
-      setCart(cart.map(item => 
-        item.id === productId ? { ...item, qty: item.qty - 1 } : item
-      ));
+      setCart(cart.map(item => item.id === id ? { ...item, qty: item.qty - 1 } : item));
     }
   };
 
-  // মোট দাম হিসাব করা
   const totalPrice = cart.reduce((acc, item) => acc + (item.price * item.qty), 0);
+
+  const confirmOrder = async () => {
+    if (cart.length === 0) return alert("কার্ট খালি!");
+    try {
+      await addDoc(collection(db, "orders"), {
+        items: cart,
+        total: totalPrice,
+        status: "Pending",
+        customer: "Sakib",
+        date: new Date()
+      });
+      alert("অর্ডার সফলভাবে অনলাইনে জমা হয়েছে!");
+      setCart([]);
+    } catch (e) {
+      alert("অর্ডার পাঠাতে সমস্যা হয়েছে।");
+    }
+  };
 
   return (
     <div className="app-container">
       <header className="main-header">
-        <h1>সাকিব স্টোর</h1>
+        <h1>সাকিব স্টোর (অনলাইন)</h1>
         <div className="cart-badge" onClick={() => setActiveTab('cart')}>
           🛒 <span>{cart.reduce((a, b) => a + b.qty, 0)}</span>
         </div>
@@ -51,14 +85,12 @@ function App() {
       <main className="content">
         {activeTab === 'home' && (
           <div className="product-grid">
-            {demoProducts.map(p => {
+            {products.length === 0 ? <p>পণ্য লোড হচ্ছে বা ডাটাবেস খালি...</p> : products.map(p => {
               const inCart = cart.find(item => item.id === p.id);
               return (
                 <div key={p.id} className="product-card">
-                  <img src={p.img} alt={p.name} />
                   <h3>{p.name}</h3>
                   <p>৳ {p.price}</p>
-                  
                   {inCart ? (
                     <div className="qty-controls">
                       <button onClick={() => removeFromCart(p.id)}>-</button>
@@ -92,7 +124,7 @@ function App() {
                 ))}
                 <div className="total-section">
                   <h3>মোট দাম: ৳ {totalPrice}</h3>
-                  <button className="checkout-btn" onClick={() => alert('অর্ডারটি অনলাইনে পাঠানো হচ্ছে...')}>অর্ডার করুন</button>
+                  <button className="checkout-btn" onClick={confirmOrder}>অর্ডার করুন</button>
                 </div>
               </>
             )}
@@ -103,7 +135,6 @@ function App() {
       <nav className="bottom-nav">
         <div onClick={() => setActiveTab('home')} className={activeTab === 'home' ? 'active' : ''}>🏠 হোম</div>
         <div onClick={() => setActiveTab('cart')} className={activeTab === 'cart' ? 'active' : ''}>🛒 কার্ট</div>
-        <div onClick={() => setActiveTab('profile')} className={activeTab === 'profile' ? 'active' : ''}>👤 প্রোফাইল</div>
       </nav>
     </div>
   );
