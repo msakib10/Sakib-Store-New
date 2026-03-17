@@ -80,6 +80,41 @@ button.add-to-cart, .btn-primary {
 /* App.css (চূড়ান্ত স্টাইলিং) */
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
 body { background: #fafafa; color: #333; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
+body { background: #fafafa; }
+
+/* হেডার ও ব্যানার */
+.main-header { position: fixed; top: 0; width: 100%; background: #fff; z-index: 100; box-shadow: 0 1px 5px #eee; }
+.header-top { display: flex; justify-content: space-between; padding: 15px; align-items: center; }
+.update-banner { background: #f1c40f; padding: 8px; text-align: center; font-size: 12px; font-weight: bold; }
+
+/* কন্টেন্ট এরিয়া */
+.content { margin-top: 100px; padding: 15px; padding-bottom: 80px; }
+.hero-card { background: #27ae60; color: #fff; padding: 25px; border-radius: 15px; margin-bottom: 20px; }
+
+/* প্রোডাক্ট কার্ড */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+.p-card { background: #fff; padding: 10px; border-radius: 12px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+.p-card img { width: 100%; border-radius: 8px; }
+.p-card button { background: #27ae60; color: #fff; border: none; padding: 5px 15px; border-radius: 5px; margin-top: 10px; }
+
+/* সাইড ড্রয়ার */
+.side-drawer { position: fixed; left: -260px; top: 0; width: 260px; height: 100%; background: #fff; z-index: 1000; transition: 0.3s; }
+.side-drawer.open { left: 0; }
+.drawer-header { background: #27ae60; color: #fff; padding: 30px 20px; }
+.menu-item { padding: 15px 20px; border-bottom: 1px solid #f5f5f5; font-size: 14px; }
+.update-highlight { color: #27ae60; font-weight: bold; background: #e8f5e9; }
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+
+/* ডাউনলোড প্রোগ্রেস বার */
+.download-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index: 2000; display:flex; align-items:center; justify-content:center; color:#fff; }
+.progress-box { width: 80%; text-align:center; }
+.progress-bar { width: 100%; height: 10px; background: #333; border-radius: 5px; margin: 15px 0; overflow:hidden; }
+.fill { height: 100%; background: #27ae60; transition: 0.2s; }
+
+/* ফুটার নেভিগেশন */
+.footer-nav { position: fixed; bottom: 0; width: 100%; background: #fff; display: flex; justify-content: space-around; padding: 15px; border-top: 1px solid #eee; }
+.footer-nav div.active { color: #27ae60; font-weight: bold; }
 
 /* হেডার স্টাইল */
 .fixed-header { position: fixed; top: 0; width: 100%; background: #fff; padding: 15px; border-bottom: 1px solid #eee; z-index: 100; }
