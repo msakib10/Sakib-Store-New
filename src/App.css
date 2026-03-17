@@ -159,3 +159,32 @@ body { background: #fafafa; }
 .admin-login-box { text-align: center; margin-top: 100px; padding: 20px; }
 .admin-login-box input { padding: 10px; width: 100%; margin-bottom: 10px; }
 .admin-login-box button { padding: 10px 20px; background: #27ae60; color: white; border: none; border-radius: 5px; margin: 5px; }
+/* App.css (চূড়ান্ত স্টাইলিং) */
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
+body { background: #fafafa; }
+
+/* হেডার ও বড় আইকন */
+.fixed-header { position: fixed; top: 0; width: 100%; background: #fff; z-index: 100; box-shadow: 0 1px 3px #eee; }
+.header-top { display: flex; justify-content: space-between; padding: 15px; align-items: center; }
+.menu-trigger { font-size: 26px; background: none; border: none; color: #27ae60; }
+.cart-badge { font-size: 26px; color: #27ae60; position: relative; }
+.cart-badge span { position: absolute; top: -5px; right: -10px; background: red; color: white; font-size: 10px; padding: 2px 5px; border-radius: 50%; }
+
+/* প্রফেশনাল সার্চবার */
+.search-container { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 10px; display: flex; align-items: center; margin-bottom: 20px; box-shadow: inset 0 1px 3px #f5f5f5; }
+.search-icon { font-size: 20px; color: #888; }
+.search-container input { border: none; outline: none; margin-left: 10px; width: 100%; font-size: 15px; color: #333; }
+.search-container input::placeholder { color: #aaa; }
+
+/* স্লাইডিং মেনু ড্রয়ার */
+.side-drawer { position: fixed; left: -260px; top: 0; width: 260px; height: 100%; background: #fff; z-index: 1000; transition: 0.3s; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
+.side-drawer.open { left: 0; }
+.drawer-header { background: #27ae60; color: #fff; padding: 30px 20px; border-radius: 0 0 15px 0; }
+.drawer-menu { padding: 10px 0; }
+.menu-item { padding: 15px 20px; border-bottom: 1px solid #f5f5f5; font-size: 14px; color: #333; cursor: pointer; }
+.menu-item.highlight { color: #27ae60; font-weight: bold; background: #e8f5e9; }
+.menu-item.admin-link { color: #e74c3c; font-weight: bold; }
+.menu-divider { height: 1px; background: #eee; margin: 10px 0; }
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+
+/* ... (বাকি পণ্য গ্রিড, ফুটার ডিজাইন আগের মতোই থাকবে) ... */
