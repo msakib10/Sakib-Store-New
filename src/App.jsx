@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
-import './App.css'; // এই ফাইলের নিচে CSS কোড দেওয়া আছে
+import './App.css';
 
-// ফায়ারবেস কনফিগারেশন
 const firebaseConfig = {
   apiKey: "AIzaSyBSKT8knhfyLHSuz-Z8nnj3jrYn2KBcP0M",
   authDomain: "sakib-store1.firebaseapp.com",
@@ -15,105 +14,136 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-
-const CURRENT_VERSION = "1.0.2"; // ভার্সন আপডেট করা হয়েছে
+const DOWNLOAD_URL = "https://github.com/msakib10/Sakib-Store-New/releases";
 
 function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState('home');
-  const [viewMode, setViewMode] = useState('customer');
+  const [activeTab, setActiveTab] = useState('home'); 
+  const [viewMode, setViewMode] = useState('customer'); 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', address: '' });
-  const [searchTerm, setSearchTerm] = useState(''); // সার্চ ফিচার
+  const [newP, setNewP] = useState({ name: '', price: '', image: '', category: 'সবজি' });
 
-  // ডাটা রিফ্রেশ ফাংশন
   const fetchData = async () => {
-    const pSnap = await getDocs(collection(db, "products"));
-    setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    const oSnap = await getDocs(collection(db, "orders"));
-    setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    try {
+      const pSnap = await getDocs(collection(db, "products"));
+      setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const oSnap = await getDocs(collection(db, "orders"));
+      setOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Error fetching data: ", e); }
   };
 
   useEffect(() => { fetchData(); }, [activeTab, viewMode]);
 
-  // পণ্য খোঁজার লজিক
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredProducts = products.filter(p => 
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const placeOrder = async () => {
-    if (!customerInfo.name || !customerInfo.phone) return alert("তথ্য পূরণ করুন!");
+    if (!customerInfo.name || !customerInfo.phone) return alert("তথ্য দিন!");
     await addDoc(collection(db, "orders"), {
       items: cart, ...customerInfo,
       total: cart.reduce((a, b) => a + Number(b.price), 0),
       status: "Pending", date: serverTimestamp()
     });
-    alert("অর্ডার সফল হয়েছে!");
+    alert("অর্ডার সফল!");
     setCart([]);
     setActiveTab('home');
   };
 
-  // --- কাস্টমার ইউজার ইন্টারফেস ---
-  const CustomerUI = () => (
-    <div className="customer-wrapper">
-      {/* বাম পাশের ড্রয়ার মেনু */}
-      <div className={`side-drawer ${isDrawerOpen ? 'open' : ''}`}>
-        <div className="drawer-header">
-          <h3>সাকিব স্টোর</h3>
-          <p>v{CURRENT_VERSION}</p>
+  if (viewMode === 'admin') {
+    return (
+      <div className="admin-view">
+        <header className="admin-header">
+          <button onClick={() => setViewMode('customer')}>⬅️ ফিরে যান</button>
+          <h2>অ্যাডমিন প্যানেল</h2>
+        </header>
+        <div className="admin-body">
+          <div className="add-form">
+            <input type="text" placeholder="পণ্যের নাম" value={newP.name} onChange={e => setNewP({...newP, name: e.target.value})} />
+            <input type="number" placeholder="দাম" value={newP.price} onChange={e => setNewP({...newP, price: e.target.value})} />
+            <button onClick={async () => {
+              await addDoc(collection(db, "products"), {...newP, price: Number(newP.price)});
+              setNewP({name:'', price:'', image:'', category:'সবজি'});
+              fetchData();
+              alert("যোগ হয়েছে!");
+            }}>Save Product</button>
+          </div>
+          <h4>স্টক লিস্ট</h4>
+          {products.map(p => (
+            <div key={p.id} className="stock-row">
+              <span>{p.name} - ৳{p.price}</span>
+              <button onClick={async () => { await deleteDoc(doc(db, "products", p.id)); fetchData(); }}>❌</button>
+            </div>
+          ))}
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="App">
+      {/* বাম পাশের ড্রয়ার */}
+      <div className={`side-drawer ${isDrawerOpen ? 'open' : ''}`}>
+        <div className="drawer-header"><h3>সাকিব স্টোর</h3></div>
         <div className="drawer-menu">
           <div className="menu-item" onClick={() => {setActiveTab('home'); setIsDrawerOpen(false);}}>🏠 হোম</div>
-          <div className="menu-item" onClick={() => {setActiveTab('profile'); setIsDrawerOpen(false);}}>👤 প্রোফাইল</div>
-          <div className="menu-item" onClick={() => {setActiveTab('cart'); setIsDrawerOpen(false);}}>🛒 কার্ট ({cart.length})</div>
-          <div className="menu-item highlight" onClick={() => window.open("LINK_TO_APK")}>🔄 অ্যাপ আপডেট করুন</div>
-          <div className="menu-divider"></div>
-          {/* অ্যাডমিন প্যানেল শুধুমাত্র এখানে থাকবে */}
-          <div className="menu-item admin-link" onClick={() => {setViewMode('admin'); setIsDrawerOpen(false);}}>🛡️ অ্যাডমিন প্যানেল</div>
-          <div className="menu-item close-item" onClick={() => setIsDrawerOpen(false)}>❌ বন্ধ করুন</div>
+          <div className="menu-item update-btn" onClick={() => window.open(DOWNLOAD_URL)}>🔄 Update App</div>
+          <div className="menu-item admin-access" onClick={() => {setViewMode('admin'); setIsDrawerOpen(false);}}>🛡️ অ্যাডমিন প্যানেল</div>
+          <div className="menu-item" onClick={() => setIsDrawerOpen(false)}>❌ বন্ধ করুন</div>
         </div>
       </div>
       {isDrawerOpen && <div className="overlay" onClick={() => setIsDrawerOpen(false)}></div>}
 
-      <header className="fixed-header">
-        <div className="header-top">
-          <button className="menu-trigger" onClick={() => setIsDrawerOpen(true)}>☰</button>
+      <header className="main-header">
+        <div className="top-bar">
+          <button className="menu-icon" onClick={() => setIsDrawerOpen(true)}>☰</button>
           <h2>সাকিব স্টোর</h2>
-          <div className="cart-badge" onClick={() => setActiveTab('cart')}>🛒<span>{cart.length}</span></div>
+          <div className="cart-count" onClick={() => setActiveTab('cart')}>🛒<span>{cart.length}</span></div>
+        </div>
+        <div className="search-bar-container">
+          <span className="s-icon">🔍</span>
+          <input type="text" placeholder="পণ্য খুঁজুন..." onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
       </header>
 
-      <main className="content">
+      <main className="main-content">
         {activeTab === 'home' && (
-          <div className="home-tab">
-            {/* প্রফেশনাল সার্চবার */}
-            <div className="search-container">
-              <span className="search-icon">🔍</span>
-              <input
-                type="text"
-                placeholder="পণ্য খুঁজুন..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+          <div className="home-view">
+            <div className="hero-banner">
+              <h2>তাজা গ্রোসারি বাজার <br/> দোরগোড়ায়</h2>
+              <button>এখনই বাজার করুন</button>
             </div>
-
-            <div className="hero-banner"><h2>তাজা মুদি বাজার <br/>আপনার দোরগোড়ায়</h2></div>
-            <h3>সেরা পণ্য</h3>
             <div className="product-grid">
-              {(searchTerm ? filteredProducts : products).map(p => (
+              {filteredProducts.map(p => (
                 <div key={p.id} className="p-card">
-                  <img src={p.image || 'https://via.placeholder.com/150'} alt={p.name} />
+                  <img src={p.image || 'https://via.placeholder.com/150'} alt="" />
                   <h4>{p.name}</h4>
                   <p>৳{p.price}</p>
-                  <button onClick={() => setCart([...cart, p])}> Add </button>
+                  <button onClick={() => setCart([...cart, p])}>Add</button>
                 </div>
               ))}
             </div>
           </div>
         )}
-        {/* ক্যাটাগরি, কার্ট, এবং প্রোফাইল সেকশন আগের মতোই থাকবে */}
+
+        {activeTab === 'cart' && (
+          <div className="cart-view">
+            <h3>শপিং কার্ট ({cart.length})</h3>
+            {cart.map((item, i) => <div key={i} className="cart-item">{item.name} - ৳{item.price}</div>)}
+            {cart.length > 0 && (
+              <div className="checkout-form">
+                <input type="text" placeholder="নাম" onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})} />
+                <input type="text" placeholder="ফোন" onChange={e => setCustomerInfo({...customerInfo, phone: e.target.value})} />
+                <textarea placeholder="ঠিকানা" onChange={e => setCustomerInfo({...customerInfo, address: e.target.value})}></textarea>
+                <button onClick={placeOrder}>অর্ডার কনফার্ম</button>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       <footer className="footer-nav">
@@ -122,21 +152,6 @@ function App() {
         <div onClick={() => setActiveTab('cart')}>🛒</div>
         <div onClick={() => setActiveTab('profile')}>👤</div>
       </footer>
-    </div>
-  );
-
-  // অ্যাডমিন প্যানেল ভিউ
-  const AdminUI = () => (
-    <div className="admin-wrapper" style={{padding: '20px'}}>
-      <button onClick={() => setViewMode('customer')}>Back</button>
-      <h3>অ্যাডমিন কন্ট্রোল</h3>
-      {/* পণ্য যোগ/বাদ দেওয়ার ফর্ম এখানে থাকবে */}
-    </div>
-  );
-
-  return (
-    <div className="App">
-      {viewMode === 'customer' ? <CustomerUI /> : <AdminUI />}
     </div>
   );
 }
