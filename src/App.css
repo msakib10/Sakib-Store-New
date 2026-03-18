@@ -250,3 +250,35 @@ body { background: #f4f7f6; }
 .profile-header-card { background: #27ae60; color: #fff; padding: 40px 20px; text-align: center; }
 .avatar { font-size: 50px; margin-bottom: 10px; }
 .p-menu-item { background: #fff; padding: 15px 20px; margin: 10px 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); font-weight: bold; display: flex; align-items: center; }
+/* App.css (চূড়ান্ত স্টাইলিং) */
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
+body { background: #fafafa; }
+
+/* হেডার স্টাইলিং */
+.main-header { position: fixed; top: 0; width: 100%; background: #fff; z-index: 100; box-shadow: 0 1px 3px #eee; }
+.header-top { display: flex; justify-content: space-between; padding: 10px 15px; align-items: center; }
+.menu-trigger { font-size: 24px; color: #27ae60; background: none; border: none; }
+.brand-header { text-align: center; flex: 1; }
+.brand-header h2 { color: #27ae60; font-size: 18px; font-weight: bold; }
+.brand-p { color: #888; font-size: 10px; font-weight: normal; }
+.cart-badge { font-size: 24px; position: relative; color: #27ae60; }
+.cart-badge span { position: absolute; top: -5px; right: -10px; background: red; color: white; font-size: 10px; padding: 2px 5px; border-radius: 50%; }
+
+/* প্রফেশনাল সার্চবার */
+.search-wrapper { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 10px 15px; display: flex; align-items: center; margin: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.search-icon { font-size: 18px; color: #aaa; }
+.search-wrapper input { border: none; outline: none; margin-left: 10px; width: 100%; font-size: 15px; color: #333; }
+.search-wrapper input::placeholder { color: #aaa; }
+
+/* ডাউনলোড প্রোগ্রেস ওভারলে */
+.download-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; color: white; }
+.progress-box { width: 80%; text-align: center; }
+.progress-bar { width: 100%; height: 8px; background: #333; border-radius: 4px; margin: 15px 0; overflow: hidden; }
+.fill { height: 100%; background: #27ae60; transition: 0.3s; }
+
+/* +/- বাটন স্টাইলিং */
+.qty-controls { display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; border-radius: 8px; padding: 5px; }
+.qty-controls button { background: #27ae60; color: #fff; border: none; width: 30px; height: 30px; border-radius: 5px; font-size: 18px; font-weight: bold; cursor: pointer; }
+.qty-controls span { font-weight: bold; font-size: 16px; color: #27ae60; }
+
+/* ... (বাকি পণ্য গ্রিড, ফুটার, ড্রয়ার ডিজাইন আগের মতোই থাকবে) ... */
