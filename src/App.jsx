@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, where } from "firebase/firestore";
+// getDoc ইমপোর্ট করা হয়েছে আপডেট চেক করার জন্য
+import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp, query, where, getDoc } from "firebase/firestore";
 import './App.css';
 
 const firebaseConfig = {
@@ -15,7 +16,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const categoriesList = ['চাল', 'ডাল', 'তেল', 'মসলা', 'ডেইরি', 'বাকি সব'];
+const categoriesList = ['সবজি', 'ফলমূল', 'মাছ ও মাংস', 'মসলা', 'ডেইরি', 'স্ন্যাকস'];
+
+// আপনার অ্যাপের বর্তমান ভার্সন কোড (ভবিষ্যতে নতুন অ্যাপ বানালে এটি 104, 105 করে দেবেন)
+const CURRENT_APP_VERSION = 103;
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -37,6 +41,9 @@ function App() {
   const [editId, setEditId] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categoriesList[0]);
 
+  // Update State (নতুন যোগ করা হয়েছে)
+  const [updateData, setUpdateData] = useState({ hasUpdate: false, url: '', code: CURRENT_APP_VERSION });
+
   const fetchData = async () => {
     try {
       const pSnap = await getDocs(collection(db, "products"));
@@ -48,6 +55,21 @@ function App() {
     fetchData(); 
     const savedUser = localStorage.getItem('sakibStoreUser');
     if(savedUser) setCustomer(JSON.parse(savedUser));
+
+    // অ্যাপ লোড হওয়ার সময় ফায়ারবেস থেকে লেটেস্ট ভার্সন চেক করার লজিক (নতুন যোগ করা হয়েছে)
+    const checkUpdate = async () => {
+      try {
+        const docRef = doc(db, "Latest", "version_info");
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.versionCode > CURRENT_APP_VERSION) {
+            setUpdateData({ hasUpdate: true, url: data.downloadUrl, code: data.versionCode });
+          }
+        }
+      } catch (e) { console.error("Update check failed:", e); }
+    };
+    checkUpdate();
   }, []);
 
   const handleLogin = () => {
@@ -112,15 +134,26 @@ function App() {
       await addDoc(collection(db, "products"), { ...newP, price: Number(newP.price), stock: Number(newP.stock) });
       alert("নতুন পণ্য যোগ হয়েছে!");
     }
-    setNewP({ name: '', price: '', image: '', category: 'চাল', stock: 10 });
+    setNewP({ name: '', price: '', image: '', category: 'সবজি', stock: 10 });
     setEditId(null);
     fetchData();
   };
 
   const editProduct = (p) => {
-    setNewP({ name: p.name, price: p.price, image: p.image, category: p.category || 'চাল', stock: p.stock || 0 });
+    setNewP({ name: p.name, price: p.price, image: p.image, category: p.category || 'সবজি', stock: p.stock || 0 });
     setEditId(p.id);
     window.scrollTo(0,0);
+  };
+
+  // Update App Button Handler (নতুন যোগ করা হয়েছে)
+  const handleUpdateApp = () => {
+    if (updateData.hasUpdate) {
+      if (window.confirm(`নতুন আপডেট (ভার্সন ${updateData.code}) পাওয়া গেছে। আপনি কি এখনই ডাউনলোড করতে চান?`)) {
+        window.location.href = updateData.url;
+      }
+    } else {
+      alert("আপনি সর্বশেষ ভার্সন ব্যবহার করছেন।");
+    }
   };
 
   const filteredProducts = products.filter(p => p.name?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -132,7 +165,7 @@ function App() {
         <div className="login-box">
           <h2>🛡️ অ্যাডমিন লগইন</h2>
           <input type="password" placeholder="পাসওয়ার্ড দিন" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
-          <button onClick={() => { if(adminPass === 'sakib017') { setViewMode('admin'); setAdminPass(''); } else alert('ভুল পাসওয়ার্ড!'); }}>লগইন</button>
+          <button onClick={() => { if(adminPass === 'sakib123') { setViewMode('admin'); setAdminPass(''); } else alert('ভুল পাসওয়ার্ড!'); }}>লগইন</button>
           <button className="cancel-btn" onClick={() => setViewMode('customer')}>ফিরে যান</button>
         </div>
       </div>
@@ -154,7 +187,7 @@ function App() {
               {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <button className="save-btn" onClick={saveProduct}>{editId ? "আপডেট করুন" : "পণ্য সেভ করুন"}</button>
-            {editId && <button className="cancel-btn" onClick={() => {setEditId(null); setNewP({ name: '', price: '', image: '', category: 'চাল, stock: 10 });}}>বাতিল করুন</button>}
+            {editId && <button className="cancel-btn" onClick={() => {setEditId(null); setNewP({ name: '', price: '', image: '', category: 'সবজি', stock: 10 });}}>বাতিল করুন</button>}
           </div>
           <h4>স্টক ম্যানেজমেন্ট</h4>
           <div className="stock-list">
@@ -187,7 +220,10 @@ function App() {
           <div className="d-item" onClick={() => {setActiveTab('home'); setIsDrawerOpen(false);}}>🏠 হোম</div>
           <div className="d-item" onClick={() => {setActiveTab('profile'); setIsDrawerOpen(false);}}>👤 প্রোফাইল</div>
           <div className="d-item" onClick={() => {setActiveTab('cart'); setIsDrawerOpen(false);}}>🛒 কার্ট</div>
-          <div className="d-item" onClick={() => {alert("নতুন আপডেট ডাউনলোড হচ্ছে..."); setIsDrawerOpen(false);}}>🔄 Update App</div>
+          
+          {/* এই আপডেট বাটনে নতুন লজিকটি বসানো হয়েছে */}
+          <div className="d-item" onClick={() => {handleUpdateApp(); setIsDrawerOpen(false);}}>🔄 Update App</div>
+          
           <div className="d-item" onClick={() => {alert("Sakib Store - বাংলাদেশের সেরা অনলাইন গ্রোসারি শপ।"); setIsDrawerOpen(false);}}>ℹ️ About Us</div>
           <div className="d-item admin-link" onClick={() => {setViewMode('adminLogin'); setIsDrawerOpen(false);}}>🛡️ অ্যাডমিন প্যানেল</div>
           <div className="d-item" onClick={() => setIsDrawerOpen(false)}>❌ বন্ধ করুন</div>
