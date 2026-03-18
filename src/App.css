@@ -204,3 +204,69 @@ body { background: #f4f7f6; color: #333; }
 .status-badge { padding: 5px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc; outline: none; }
 .o-items { background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 13px; color: #555; }
 .o-total { color: #ff4757; display: block; text-align: right; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
+body { background: #fafafa; }
+
+/* Header & Drawer */
+.app-header { position: fixed; top: 0; width: 100%; height: 60px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; box-shadow: 0 1px 3px #eee; z-index: 100; }
+.menu-btn, .cart-icon { font-size: 24px; color: #27ae60; background: none; border: none; }
+.brand-title { text-align: center; }
+.brand-title h2 { color: #27ae60; font-size: 18px; font-weight: bold; }
+.brand-title p { color: #888; font-size: 10px; }
+.cart-icon span { position: absolute; top: 5px; right: 8px; background: red; color: white; font-size: 10px; padding: 2px 5px; border-radius: 50%; }
+
+.drawer { position: fixed; top: 0; left: -250px; width: 250px; height: 100vh; background: #fff; z-index: 200; transition: 0.3s; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
+.drawer.open { left: 0; }
+.d-header { background: #27ae60; color: #fff; padding: 20px; text-align: center; }
+.d-menu { padding: 10px 0; }
+.d-item { padding: 15px 20px; border-bottom: 1px solid #f5f5f5; font-weight: bold; cursor: pointer; }
+.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 150; }
+
+.main-content { margin-top: 60px; padding-bottom: 70px; }
+.search-container { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; margin: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.search-container input { border: none; outline: none; margin-left: 10px; width: 100%; }
+
+/* Product Grid */
+.product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 15px; }
+.product-card { background: #fff; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+.product-card img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+.price-stock { display: flex; justify-content: space-between; font-size: 12px; margin: 5px 0; }
+.price { color: #27ae60; font-weight: bold; }
+.stock.out { color: red; font-weight: bold; }
+.qty-box { display: flex; justify-content: space-around; align-items: center; background: #e8f5e9; padding: 5px; border-radius: 5px; }
+.add-btn { width: 100%; padding: 8px; background: #27ae60; color: #fff; border: none; border-radius: 5px; }
+
+/* Checkout Form Fix */
+.checkout-form input, .mfs-details input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; }
+.two-col { display: flex; gap: 10px; }
+
+/* ২. گول প্রোফাইল ছবি ও বিশাল ছবি প্রতিরোধ Fix */
+.pic-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+.pro-pic {
+  width: 100px; /* নির্দিষ্ট width */
+  height: 100px; /* নির্দিষ্ট height */
+  border-radius: 50%; /* গোল ছবি */
+  object-fit: cover; /* ছবির অনুপাত ঠিক রাখা (টেনে বড় হবে না) */
+  overflow: hidden; /* বাইরে কাটা অংশ লুকানো */
+  border: 3px solid #ff4757;
+  display: block;
+  margin: 0 auto;
+}
+.upload-icon {
+  position: absolute; bottom: 0; right: 0;
+  background: #ff4757; color: white; width: 30px; height: 30px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid white;
+}
+
+/* Admin Order Card Fix */
+.admin-order-card {
+  background: white; padding: 15px; border-radius: 10px; margin: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+.o-customer {
+  border-bottom: 1px dashed #eee; padding-bottom: 10px; margin-bottom: 10px; font-size: 13px; color: #555;
+}
+.o-customer p { margin: 3px 0; }
