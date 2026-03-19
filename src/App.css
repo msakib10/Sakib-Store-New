@@ -1,218 +1,10 @@
-* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'SolaimanLipi', sans-serif; }
-body { background: #f4f7f6; color: #333; }
-
-/* Header & Search */
-.app-header { position: fixed; top: 0; width: 100%; height: 60px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 100; }
-.menu-btn { font-size: 24px; color: #27ae60; background: none; border: none; cursor: pointer; }
-.brand-title { text-align: center; line-height: 1.1; }
-.brand-title h2 { color: #27ae60; font-size: 18px; font-weight: 800; }
-.brand-title p { font-size: 10px; color: #777; }
-.cart-icon { font-size: 22px; position: relative; color: #27ae60; cursor: pointer; }
-.cart-icon span { position: absolute; top: -5px; right: -8px; background: #e74c3c; color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 50%; }
-
-.main-content { margin-top: 60px; padding-bottom: 70px; }
-.search-container { background: #fff; margin: 15px; border-radius: 10px; padding: 10px 15px; display: flex; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-.search-container input { border: none; outline: none; margin-left: 10px; width: 100%; font-size: 15px; }
-
-/* Products Grid */
-.sec-title { padding: 0 15px 10px; font-size: 18px; color: #444; }
-.product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 0 15px; }
-.product-card { background: #fff; border-radius: 12px; padding: 10px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-.product-card img { width: 100%; height: 110px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
-.product-card h4 { font-size: 14px; margin-bottom: 5px; }
-.price-stock { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
-.price { color: #27ae60; font-weight: bold; }
-.stock { color: #888; }
-.stock.out { color: #e74c3c; font-weight: bold; }
-
-.qty-box { display: flex; justify-content: space-between; align-items: center; background: #e8f5e9; border-radius: 6px; padding: 4px; }
-.qty-box button { background: #27ae60; color: #fff; border: none; width: 28px; height: 28px; border-radius: 4px; font-size: 16px; font-weight: bold; }
-.add-btn { width: 100%; padding: 8px; background: #27ae60; color: #fff; border: none; border-radius: 6px; font-weight: bold; }
-.add-btn:disabled { background: #ccc; }
-
-/* Category Split Layout */
-.split-layout { display: flex; height: calc(100vh - 130px); }
-.cat-sidebar { width: 30%; background: #fff; border-right: 1px solid #eee; overflow-y: auto; }
-.cat-item { padding: 15px 10px; text-align: center; border-bottom: 1px solid #eee; font-size: 14px; cursor: pointer; }
-.cat-item.active { background: #e8f5e9; color: #27ae60; font-weight: bold; border-left: 4px solid #27ae60; }
-.cat-products { width: 70%; padding: 10px; overflow-y: auto; }
-.list-card { display: flex; background: #fff; padding: 10px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.03); }
-.list-card img { width: 70px; height: 70px; border-radius: 6px; object-fit: cover; margin-right: 10px; }
-.l-info h4 { font-size: 14px; margin-bottom: 4px; }
-.l-info p { font-size: 12px; color: #666; margin-bottom: 8px; }
-.qty-box.small button { width: 24px; height: 24px; font-size: 14px; }
-.add-btn.small { padding: 5px; font-size: 12px; }
-
-/* Cart & Checkout */
-.cart-list { background: #fff; margin: 15px; padding: 15px; border-radius: 10px; }
-.c-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed #eee; font-size: 14px; }
-.c-total { display: flex; justify-content: space-between; padding-top: 10px; color: #27ae60; font-size: 16px; }
-.checkout-form { background: #fff; margin: 15px; padding: 15px; border-radius: 10px; }
-.checkout-form h4 { margin-bottom: 15px; text-align: center; }
-.checkout-form input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; }
-.two-col { display: flex; gap: 10px; }
-.payment-section { margin: 15px 0; padding: 10px; background: #f9f9f9; border-radius: 8px; }
-.payment-section label { display: block; margin-bottom: 8px; font-size: 14px; cursor: pointer; }
-.order-btn { width: 100%; padding: 12px; background: #e74c3c; color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; }
-
-/* Admin & Profile */
-.login-screen { height: 100vh; display: flex; justify-content: center; align-items: center; }
-.login-box { background: #fff; padding: 20px; border-radius: 10px; width: 80%; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-.login-box input, .login-box button { width: 100%; margin-top: 10px; padding: 10px; border-radius: 6px; }
-.login-box button { background: #27ae60; color: white; border: none; }
-.login-box .cancel-btn { background: #e74c3c; }
-
-.admin-header { background: #333; color: #fff; padding: 15px; display: flex; justify-content: space-between; }
-.admin-header button { background: none; color: #fff; border: none; font-weight: bold; }
-.form-card { background: #fff; padding: 15px; margin: 15px; border-radius: 10px; }
-.form-card input, .form-card select { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 6px; }
-.save-btn { width: 100%; padding: 10px; background: #27ae60; color: #fff; border: none; border-radius: 6px; margin-bottom: 5px; }
-.cancel-btn { width: 100%; padding: 10px; background: #777; color: #fff; border: none; border-radius: 6px; }
-
-.stock-row { display: flex; background: #fff; margin: 10px 15px; padding: 10px; border-radius: 8px; align-items: center; }
-.stock-row img { width: 40px; height: 40px; border-radius: 4px; margin-right: 10px; }
-.s-info { flex: 1; font-size: 12px; }
-.s-actions button { border: none; padding: 5px 8px; border-radius: 4px; margin-left: 5px; color: white; }
-.e-btn { background: #f39c12; }
-.d-btn { background: #e74c3c; }
-
-/* Drawer & Footer */
-.drawer { position: fixed; top: 0; left: -250px; width: 250px; height: 100vh; background: #fff; z-index: 200; transition: 0.3s; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
-.drawer.open { left: 0; }
-.d-header { background: #27ae60; color: #fff; padding: 20px; text-align: center; }
-.d-item { padding: 15px 20px; border-bottom: 1px solid #eee; font-weight: bold; cursor: pointer; }
-.overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 150; }
-
-.footer { position: fixed; bottom: 0; width: 100%; height: 60px; background: #fff; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
-.footer div { display: flex; flex-direction: column; align-items: center; color: #888; font-size: 20px; cursor: pointer; }
-.footer div.active { color: #27ae60; }
-/* --- New UI Features CSS --- */
-
-/* Profile Picture Upload */
-.pic-wrapper {
-  position: relative;
-  display: inline-block;
-  margin-bottom: 10px;
-}
-.upload-icon {
-  position: absolute;
-  bottom: 5px;
-  right: 5px;
-  background: #ff4757;
-  color: white;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
-  border: 2px solid white;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-}
-
-/* Payment Gateway Info */
-.mfs-details {
-  background: #f1f2f6;
-  padding: 15px;
-  border-radius: 8px;
-  margin-top: 10px;
-  border-left: 4px solid #ff4757;
-}
-.mfs-notice {
-  font-size: 13px;
-  color: #2f3542;
-  margin-bottom: 10px;
-}
-
-/* Cart Delivery Charge */
-.delivery-row {
-  color: #747d8c;
-  font-size: 14px;
-  border-bottom: 1px dashed #dfe4ea;
-  padding-bottom: 10px;
-}
-.grand-total {
-  color: #ff4757;
-  font-size: 18px;
-}
-
-/* Tracking Card & Timeline */
-.back-btn {
-  background: #f1f2f6;
-  border: none;
-  padding: 8px 15px;
-  border-radius: 5px;
-  margin-bottom: 15px;
-  cursor: pointer;
-  color: #2f3542;
-  font-weight: bold;
-}
-.tracking-card {
-  background: white;
-  padding: 15px;
-  border-radius: 10px;
-  margin-bottom: 15px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  border: 1px solid #f1f2f6;
-}
-.t-head { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; }
-.t-date { font-size: 12px; color: #747d8c; margin-bottom: 10px; }
-.badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
-.badge.Pending { background: #ffeaa7; color: #d63031; }
-.badge.Confirmed { background: #74b9ff; color: white; }
-.badge.Shipped { background: #a29bfe; color: white; }
-.badge.Delivered { background: #55efc4; color: #00b894; }
-
-.timeline {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #f1f2f6;
-  font-size: 11px;
-  text-align: center;
-}
-.step {
-  flex: 1;
-  color: #b2bec3;
-  position: relative;
-}
-.step.active {
-  color: #ff4757;
-  font-weight: bold;
-}
-
-/* Admin Tabs & Orders */
-.admin-tabs {
-  display: flex;
-  background: white;
-  border-bottom: 2px solid #f1f2f6;
-}
-.admin-tabs button {
-  flex: 1; padding: 12px; background: none; border: none; font-weight: bold; color: #747d8c; cursor: pointer;
-}
-.admin-tabs button.active {
-  color: #ff4757; border-bottom: 3px solid #ff4757;
-}
-.admin-order-card {
-  background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.o-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
-.status-badge { padding: 5px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc; outline: none; }
-.o-items { background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 13px; color: #555; }
-.o-total { color: #ff4757; display: block; text-align: right; }
 * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'SolaimanLipi', sans-serif; }
-body { background: #fafafa; }
+body { background: #f0f2f5; }
 
 /* Header & Drawer */
 .app-header { position: fixed; top: 0; width: 100%; height: 60px; background: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; box-shadow: 0 1px 3px #eee; z-index: 100; }
 .menu-btn, .cart-icon { font-size: 24px; color: #27ae60; background: none; border: none; }
-.brand-title { text-align: center; }
-.brand-title h2 { color: #27ae60; font-size: 18px; font-weight: bold; }
-.brand-title p { color: #888; font-size: 10px; }
+.brand-title h2 { color: #27ae60; font-size: 20px; font-weight: bold; }
 .cart-icon span { position: absolute; top: 5px; right: 8px; background: red; color: white; font-size: 10px; padding: 2px 5px; border-radius: 50%; }
 
 .drawer { position: fixed; top: 0; left: -250px; width: 250px; height: 100vh; background: #fff; z-index: 200; transition: 0.3s; box-shadow: 2px 0 5px rgba(0,0,0,0.1); }
@@ -223,50 +15,57 @@ body { background: #fafafa; }
 .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 150; }
 
 .main-content { margin-top: 60px; padding-bottom: 70px; }
-.search-container { background: #fff; border: 1px solid #ddd; border-radius: 8px; padding: 10px; display: flex; margin: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-.search-container input { border: none; outline: none; margin-left: 10px; width: 100%; }
+.sec-title { padding: 15px; color: #333; }
+
+/* Categories */
+.cat-list { display: flex; flex-direction: column; gap: 10px; padding: 0 15px; }
+.cat-list button { padding: 15px; border: 1px solid #ddd; background: white; border-radius: 8px; font-size: 16px; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.cat-list button.active-cat { background: #27ae60; color: white; border-color: #27ae60; }
 
 /* Product Grid */
+.search-container { background: #fff; border-radius: 8px; padding: 10px; display: flex; margin: 15px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+.search-container input { border: none; outline: none; margin-left: 10px; width: 100%; }
 .product-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 0 15px; }
 .product-card { background: #fff; border-radius: 10px; padding: 10px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 .product-card img { width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
 .price-stock { display: flex; justify-content: space-between; font-size: 12px; margin: 5px 0; }
 .price { color: #27ae60; font-weight: bold; }
-.stock.out { color: red; font-weight: bold; }
 .qty-box { display: flex; justify-content: space-around; align-items: center; background: #e8f5e9; padding: 5px; border-radius: 5px; }
 .add-btn { width: 100%; padding: 8px; background: #27ae60; color: #fff; border: none; border-radius: 5px; }
 
-/* Checkout Form Fix */
-.checkout-form input, .mfs-details input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; }
+/* Advanced Professional Login Centered */
+.login-screen-wrapper { display: flex; justify-content: center; align-items: center; min-height: 70vh; padding: 20px; }
+.pro-login-card { background: white; padding: 30px 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 350px; text-align: center; }
+.pro-login-card h3 { color: #333; margin-bottom: 10px; }
+.pro-login-card p { color: #777; font-size: 13px; margin-bottom: 20px; }
+.pro-login-card input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; text-align: center; }
+.primary-btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; }
+
+/* Facebook Style Cover & Profile Picture */
+.cover-photo-area { position: relative; height: 160px; background: #ddd; margin-bottom: 50px; }
+.cover-img { width: 100%; height: 100%; object-fit: cover; }
+.edit-cover-btn { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer; }
+.pro-pic-area { position: absolute; bottom: -40px; left: 50%; transform: translateX(-50%); width: 100px; height: 100px; border-radius: 50%; border: 4px solid white; background: white; }
+.pro-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.edit-pro-btn { position: absolute; bottom: 0; right: 0; background: #27ae60; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; cursor: pointer; border: 2px solid white; }
+.user-info-text { text-align: center; padding: 0 15px; }
+.logout-sm-btn { background: #ff4757; color: white; border: none; padding: 5px 15px; border-radius: 15px; margin-top: 10px; font-size: 12px; }
+
+/* Customer Orders & Colorful Badges */
+.customer-orders-section { padding: 15px; margin-top: 20px; }
+.my-order-card, .admin-order-card { background: white; padding: 15px; border-radius: 10px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 4px solid #ddd; }
+.m-header, .o-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #eee; padding-bottom: 10px; margin-bottom: 10px; }
+.status-badge { padding: 5px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; border: none; outline: none; }
+.status-pending { background-color: #f39c12; }
+.status-confirmed { background-color: #3498db; }
+.status-shipped { background-color: #9b59b6; }
+.status-delivered { background-color: #2ecc71; }
+.my-order-card.status-pending, .admin-order-card.status-pending { border-left-color: #f39c12; }
+/* Checkout & Footer */
+.checkout-form { padding: 15px; background: white; margin-top: 10px; }
+.checkout-form input { width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 5px; }
 .two-col { display: flex; gap: 10px; }
-
-/* ২. گول প্রোফাইল ছবি ও বিশাল ছবি প্রতিরোধ Fix */
-.pic-wrapper {
-  position: relative;
-  display: inline-block;
-  margin-bottom: 10px;
-}
-.pro-pic {
-  width: 100px; /* নির্দিষ্ট width */
-  height: 100px; /* নির্দিষ্ট height */
-  border-radius: 50%; /* গোল ছবি */
-  object-fit: cover; /* ছবির অনুপাত ঠিক রাখা (টেনে বড় হবে না) */
-  overflow: hidden; /* বাইরে কাটা অংশ লুকানো */
-  border: 3px solid #ff4757;
-  display: block;
-  margin: 0 auto;
-}
-.upload-icon {
-  position: absolute; bottom: 0; right: 0;
-  background: #ff4757; color: white; width: 30px; height: 30px;
-  border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid white;
-}
-
-/* Admin Order Card Fix */
-.admin-order-card {
-  background: white; padding: 15px; border-radius: 10px; margin: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-.o-customer {
-  border-bottom: 1px dashed #eee; padding-bottom: 10px; margin-bottom: 10px; font-size: 13px; color: #555;
-}
-.o-customer p { margin: 3px 0; }
+.order-btn { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 8px; font-weight: bold; margin-top: 10px; }
+.footer { position: fixed; bottom: 0; width: 100%; height: 60px; background: #fff; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -1px 3px #eee; z-index: 100; }
+.footer div { display: flex; flex-direction: column; align-items: center; font-size: 20px; color: #888; cursor: pointer; }
+.footer div.active { color: #27ae60; }
