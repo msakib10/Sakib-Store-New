@@ -116,3 +116,121 @@
 .status-badge { padding: 5px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc; outline: none; }
 .o-items { background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 13px; color: #555; }
 .o-total { color: #ff4757; display: block; text-align: right; }
+/* --- New UI Features CSS --- */
+
+/* Profile Picture Upload */
+.pic-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 10px;
+}
+.upload-icon {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  background: #ff4757;
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+/* Payment Gateway Info */
+.mfs-details {
+  background: #f1f2f6;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 10px;
+  border-left: 4px solid #ff4757;
+}
+.mfs-notice {
+  font-size: 13px;
+  color: #2f3542;
+  margin-bottom: 10px;
+}
+
+/* Cart Delivery Charge */
+.delivery-row {
+  color: #747d8c;
+  font-size: 14px;
+  border-bottom: 1px dashed #dfe4ea;
+  padding-bottom: 10px;
+}
+.grand-total {
+  color: #ff4757;
+  font-size: 18px;
+}
+
+/* Tracking Card & Timeline */
+.back-btn {
+  background: #f1f2f6;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  color: #2f3542;
+  font-weight: bold;
+}
+.tracking-card {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  border: 1px solid #f1f2f6;
+}
+.t-head { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; }
+.t-date { font-size: 12px; color: #747d8c; margin-bottom: 10px; }
+.badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+.badge.Pending { background: #ffeaa7; color: #d63031; }
+.badge.Confirmed { background: #74b9ff; color: white; }
+.badge.Shipped { background: #a29bfe; color: white; }
+.badge.Delivered { background: #55efc4; color: #00b894; }
+
+.timeline {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #f1f2f6;
+  font-size: 11px;
+  text-align: center;
+}
+.step {
+  flex: 1;
+  color: #b2bec3;
+  position: relative;
+}
+.step.active {
+  color: #ff4757;
+  font-weight: bold;
+}
+
+/* Admin Tabs & Orders */
+.admin-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 2px solid #f1f2f6;
+}
+.admin-tabs button {
+  flex: 1; padding: 12px; background: none; border: none; font-weight: bold; color: #747d8c; cursor: pointer;
+}
+.admin-tabs button.active {
+  color: #ff4757; border-bottom: 3px solid #ff4757;
+}
+.admin-order-card {
+  background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.o-header { display: flex; justify-content: space-between; margin-bottom: 10px; }
+.status-badge { padding: 5px; border-radius: 5px; font-weight: bold; border: 1px solid #ccc; outline: none; }
+.o-items { background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0; font-size: 13px; color: #555; }
+.o-total { color: #ff4757; display: block; text-align: right; }
