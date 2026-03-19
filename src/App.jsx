@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, updateDoc, getDoc, setDoc } from "firebase/firestore";
-// নতুন: ফায়ারবেস অথেন্টিকেশন ইম্পোর্ট করা হলো
-import { getAuth, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, getDoc, setDoc, query, where } from "firebase/firestore";
+import { getAuth, RecaptchaVerifier, signInWithPhoneNumber, onAuthStateChanged, signOut } from "firebase/auth";
 import './App.css';
 
+// আপনার ফায়ারবেস কনফিগারেশন
 const firebaseConfig = {
   apiKey: "AIzaSyBSKT8knhfyLHSuz-Z8nnj3jrYn2KBcP0M",
   authDomain: "sakib-store1.firebaseapp.com",
@@ -16,486 +17,319 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const auth = getAuth(app); // নতুন: অথেন্টিকেশন চালু করা হলো
+const auth = getAuth(app);
 
-const CURRENT_APP_VERSION = 104; 
-
-const categoriesList = ['পাইকারি', 'চাল', 'ডাল', 'তেল', 'পানীয়', 'অন্যান্য'];
-const unitList = ['কেজি', 'লিটার', 'পিস', 'হালি', 'ডজন', 'গ্রাম', 'প্যাকেট'];
-const DELIVERY_CHARGE = 50; 
+const CURRENT_VERSION_CODE = 105; // আপনার অ্যাপের বর্তমান ভার্সন
+const DELIVERY_CHARGE = 50;
+const categoriesList = ['সব পণ্য', 'পাইকারি', 'চাল', 'ডাল', 'তেল', 'মসলা', 'পানীয়', 'অন্যান্য'];
 
 function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState('home'); 
-  const [viewMode, setViewMode] = useState('customer'); 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [viewMode, setViewMode] = useState('customer');
+  const [selectedCat, setSelectedCat] = useState('সব পণ্য');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategoryNav, setSelectedCategoryNav] = useState('সব');
-  
-  // Customer & Checkout State
-  const [customer, setCustomer] = useState(null);
-  const [customerOrders, setCustomerOrders] = useState([]);
-  const [customerInfo, setCustomerInfo] = useState({ name: '', phone: '', email: '', house: '', area: '', postOffice: '', upazila: '', district: '', division: '', note: '' });
-  const [paymentMethod, setPaymentMethod] = useState('Cash on Delivery');
-  const [paymentDetails, setPaymentDetails] = useState({ senderNumber: '', trxId: '' });
-  
-  // Login States (REAL OTP)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // User & Order State
+  const [user, setUser] = useState(null);
+  const [userOrders, setUserOrders] = useState([]);
+  const [userInfo, setUserInfo] = useState({ name: '', phone: '', area: '', fullAddress: '' });
+  const [updateInfo, setUpdateInfo] = useState({ hasUpdate: false, url: '', version: '' });
+
+  // OTP Login State
   const [loginPhone, setLoginPhone] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
-  const [confirmationResult, setConfirmationResult] = useState(null); // OTP কনফার্ম করার জন্য
+  const [otpSent, setOtpSent] = useState(false);
+  const [confirmResult, setConfirmResult] = useState(null);
 
   // Admin State
-  const [adminPass, setAdminPass] = useState('');
-  const [adminTab, setAdminTab] = useState('orders');
   const [allOrders, setAllOrders] = useState([]);
-  const [newP, setNewP] = useState({ name: '', price: '', image: '', category: 'পাইকারি', stock: 10, unit: 'কেজি' });
-  const [editId, setEditId] = useState(null);
 
-  const [updateData, setUpdateData] = useState({ hasUpdate: false, url: '', code: CURRENT_APP_VERSION });
-
-  const fetchData = async () => {
-    try {
-      const pSnap = await getDocs(collection(db, "products"));
-      setProducts(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error("Error:", e); }
-  };
-
-  useEffect(() => { 
-    fetchData(); 
-    const savedUser = localStorage.getItem('sakibStoreUser');
-    if(savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setCustomer(parsedUser);
-      fetchCustomerProfile(parsedUser.phone);
-    }
+  useEffect(() => {
+    fetchProducts();
     checkUpdate();
+    onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        const phone = currentUser.phoneNumber.replace("+88", "");
+        setUser({ phone });
+        loadUserData(phone);
+      }
+    });
   }, []);
 
+  const fetchProducts = async () => {
+    const snap = await getDocs(collection(db, "products"));
+    setProducts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  };
+
   const checkUpdate = async () => {
-    try {
-      const docSnap = await getDoc(doc(db, "Latest", "version_info"));
-      if (docSnap.exists() && docSnap.data().versionCode > CURRENT_APP_VERSION) {
-        setUpdateData({ hasUpdate: true, url: docSnap.data().downloadUrl, code: docSnap.data().versionCode });
-      }
-    } catch (e) { console.error("Update check failed:", e); }
+    const docSnap = await getDoc(doc(db, "Latest", "version_info"));
+    if (docSnap.exists() && docSnap.data().versionCode > CURRENT_VERSION_CODE) {
+      setUpdateInfo({ hasUpdate: true, url: docSnap.data().downloadUrl, version: docSnap.data().versionName });
+    }
   };
 
-  const fetchCustomerProfile = async (phone) => {
-    try {
-      const userDoc = await getDoc(doc(db, "users", phone));
-      if (userDoc.exists()) {
-        const data = userDoc.data();
-        setCustomerInfo(data.info || customerInfo);
-        setCustomer(prev => ({ ...prev, pic: data.pic || prev.pic, cover: data.cover || prev.cover }));
-      }
-      const ordersSnap = await getDocs(collection(db, "orders"));
-      const myOrders = ordersSnap.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(o => o.userPhone === phone)
-        .sort((a, b) => b.timestamp - a.timestamp); 
-      setCustomerOrders(myOrders);
-    } catch (error) { console.log(error); }
+  const loadUserData = async (phone) => {
+    const uSnap = await getDoc(doc(db, "users", phone));
+    if (uSnap.exists()) setUserInfo(uSnap.data().info || userInfo);
+    const oSnap = await getDocs(query(collection(db, "orders"), where("userPhone", "==", phone)));
+    setUserOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
   };
 
-  // --- নতুন: আসল OTP পাঠানোর ফাংশন ---
+  // OTP Logic
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible',
-        'callback': (response) => {
-          // reCAPTCHA solved
-        }
-      });
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
     }
   };
 
   const sendOtp = async () => {
-    if(loginPhone.length !== 11) return alert("সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXX)!");
-    
-    // বাংলাদেশি নম্বরের ফরম্যাট তৈরি (+880...)
-    const phoneNumber = "+88" + loginPhone; 
-    
+    if (loginPhone.length !== 11) return alert("সঠিক ১১ ডিজিটের নম্বর দিন!");
     try {
       setupRecaptcha();
-      const appVerifier = window.recaptchaVerifier;
-      
-      const result = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
-      setConfirmationResult(result);
+      const res = await signInWithPhoneNumber(auth, "+88" + loginPhone, window.recaptchaVerifier);
+      setConfirmResult(res);
       setOtpSent(true);
-      alert(`আপনার ${loginPhone} নম্বরে একটি ভেরিফিকেশন কোড পাঠানো হয়েছে!`);
-    } catch (error) {
-      console.error(error);
-      alert("কোড পাঠাতে সমস্যা হয়েছে! নিশ্চিত করুন যে ফায়ারবেসে Phone Auth চালু করেছেন। Error: " + error.message);
-    }
+      alert("আপনার ফোনে OTP পাঠানো হয়েছে!");
+    } catch (e) { alert("Error: " + e.message); }
   };
 
-  const handleLogin = async () => {
-    if(!otpCode) return alert("দয়া করে মেসেজে আসা কোডটি দিন!");
+  const verifyOtp = async () => {
     try {
-      // আসল OTP মিলিয়ে দেখা হচ্ছে
-      await confirmationResult.confirm(otpCode);
-      
-      const userData = { phone: loginPhone, pic: 'https://via.placeholder.com/100', cover: 'https://via.placeholder.com/400x150' };
-      setCustomer(userData);
-      localStorage.setItem('sakibStoreUser', JSON.stringify(userData));
-      await fetchCustomerProfile(loginPhone);
-      setActiveTab('home');
-      setOtpSent(false); setOtpCode('');
-    } catch (error) {
-      alert("ভুল কোড! মেসেজটি ভালোভাবে চেক করে আবার দিন।");
-    }
-  };
-  // ------------------------------------
-
-  const handleLogout = () => {
-    setCustomer(null);
-    localStorage.removeItem('sakibStoreUser');
-    setCart([]); setCustomerOrders([]);
+      await confirmResult.confirm(otpCode);
+      setOtpSent(false);
+    } catch (e) { alert("ভুল কোড! আবার চেষ্টা করুন।"); }
   };
 
-  const saveProfileImage = async (type, e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const updatedUser = { ...customer, [type]: reader.result };
-        setCustomer(updatedUser);
-        localStorage.setItem('sakibStoreUser', JSON.stringify(updatedUser));
-        await setDoc(doc(db, "users", customer.phone), { [type]: reader.result }, { merge: true });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleCart = (product, action) => {
-    const existing = cart.find(c => c.id === product.id);
-    if (action === 'add') {
-      if(product.stock <= 0) return alert("স্টকে নেই!");
-      if(existing && existing.qty >= product.stock) return alert("স্টকের চেয়ে বেশি দেওয়া যাবে না!");
-      if (existing) setCart(cart.map(c => c.id === product.id ? { ...c, qty: c.qty + 1 } : c));
-      else setCart([...cart, { ...product, qty: 1 }]);
-    } else if (action === 'remove' && existing) {
-      if (existing.qty === 1) setCart(cart.filter(c => c.id !== product.id));
-      else setCart(cart.map(c => c.id === product.id ? { ...c, qty: c.qty - 1 } : c));
-    }
-  };
-
-  const cartTotal = cart.reduce((total, item) => total + (item.price * item.qty), 0);
-  const grandTotal = cartTotal > 0 ? cartTotal + DELIVERY_CHARGE : 0;
-
-  const placeOrder = async () => {
-    if (!customerInfo.name || !customerInfo.phone || !customerInfo.district || !customerInfo.area) return alert("দয়া করে প্রয়োজনীয় সব তথ্য দিন!");
-    if (cart.length === 0) return alert("কার্ট খালি!");
-    
-    try {
-      const orderData = {
-        items: cart, customerInfo, 
-        payment: { method: paymentMethod, ...paymentDetails }, 
-        subTotal: cartTotal, deliveryCharge: DELIVERY_CHARGE, total: grandTotal, 
-        status: "Pending", date: new Date().toLocaleString(), timestamp: Date.now(),
-        userPhone: customer?.phone || customerInfo.phone
-      };
-      await addDoc(collection(db, "orders"), orderData);
-      
-      if(customer) {
-        await setDoc(doc(db, "users", customer.phone), { info: customerInfo }, { merge: true });
-        fetchCustomerProfile(customer.phone);
-      }
-      
-      for (const item of cart) {
-        await updateDoc(doc(db, "products", item.id), { stock: Number(item.stock) - Number(item.qty) });
-      }
-      alert(`অর্ডার সফল! আপনার অর্ডারটি গ্রহণ করা হয়েছে।`);
-      setCart([]); fetchData(); setActiveTab('profile');
-    } catch (error) { alert("অর্ডার করতে সমস্যা হয়েছে!"); }
-  };
-
-  // ADMIN FUNCTIONS
-  const saveProduct = async () => {
-    if(!newP.name || !newP.price) return alert("তথ্য অসম্পূর্ণ!");
-    if(editId) {
-      await updateDoc(doc(db, "products", editId), { ...newP, price: Number(newP.price), stock: Number(newP.stock) });
-      alert("আপডেট হয়েছে!");
+  // Cart Logic
+  const handleCart = (p, type) => {
+    const exist = cart.find(x => x.id === p.id);
+    if (type === 'add') {
+      if (exist) setCart(cart.map(x => x.id === p.id ? { ...x, qty: x.qty + 1 } : x));
+      else setCart([...cart, { ...p, qty: 1 }]);
     } else {
-      await addDoc(collection(db, "products"), { ...newP, price: Number(newP.price), stock: Number(newP.stock) });
-      alert("যোগ হয়েছে!");
-    }
-    setNewP({ name: '', price: '', image: '', category: 'পাইকারি', stock: 10, unit: 'কেজি' });
-    setEditId(null); fetchData();
-  };
-
-  const fetchAllOrders = async () => {
-    const snap = await getDocs(collection(db, "orders"));
-    const sortedOrders = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => b.timestamp - a.timestamp);
-    setAllOrders(sortedOrders);
-  };
-
-  const updateOrderStatus = async (orderId, newStatus) => {
-    await updateDoc(doc(db, "orders", orderId), { status: newStatus });
-    fetchAllOrders();
-    if(customer) fetchCustomerProfile(customer.phone); 
-  };
-
-  const filteredProducts = products.filter(p => 
-    (selectedCategoryNav === 'সব' || p.category === selectedCategoryNav) && 
-    p.name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Pending': return 'status-pending';
-      case 'Confirmed': return 'status-confirmed';
-      case 'Shipped': return 'status-shipped';
-      case 'Delivered': return 'status-delivered';
-      default: return '';
+      if (exist.qty === 1) setCart(cart.filter(x => x.id !== p.id));
+      else setCart(cart.map(x => x.id === p.id ? { ...x, qty: x.qty - 1 } : x));
     }
   };
 
-  // --- ADMIN VIEW ---
-  if (viewMode === 'adminLogin') {
-    return (
-      <div className="login-screen">
-        <div className="login-box admin-login-box">
-          <h2>🛡️ অ্যাডমিন প্যানেল</h2>
-          <p>সঠিক পাসওয়ার্ড দিয়ে প্রবেশ করুন</p>
-          <input type="password" placeholder="পাসওয়ার্ড দিন" value={adminPass} onChange={e => setAdminPass(e.target.value)} />
-          <button onClick={() => { if(adminPass === 'sakib123') { setViewMode('admin'); setAdminPass(''); fetchAllOrders(); } else alert('ভুল পাসওয়ার্ড!'); }}>লগইন</button>
-          <button className="cancel-btn" onClick={() => setViewMode('customer')}>ফিরে যান</button>
-        </div>
-      </div>
-    );
-  }
+  const submitOrder = async () => {
+    if (!userInfo.name || !userInfo.phone || !userInfo.area) return alert("দয়া করে নাম, নম্বর ও ঠিকানা দিন!");
+    const total = cart.reduce((a,c) => a + (c.price * c.qty), 0) + DELIVERY_CHARGE;
+    const orderData = {
+      items: cart, userInfo, userPhone: user?.phone || userInfo.phone,
+      total, status: 'Pending', date: new Date().toLocaleString(), timestamp: Date.now()
+    };
+    await addDoc(collection(db, "orders"), orderData);
+    if (user) await setDoc(doc(db, "users", user.phone), { info: userInfo }, { merge: true });
+    alert("আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে!");
+    setCart([]); setActiveTab('profile'); loadUserData(user?.phone);
+  };
+
+  // Admin View Load
+  const openAdmin = async () => {
+    const pass = prompt("অ্যাডমিন পাসওয়ার্ড দিন:");
+    if (pass === 'sakib123') { // পাসওয়ার্ড sakib123
+      setViewMode('admin');
+      setIsDrawerOpen(false);
+      const oSnap = await getDocs(collection(db, "orders"));
+      setAllOrders(oSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+    } else alert("ভুল পাসওয়ার্ড!");
+  };
 
   if (viewMode === 'admin') {
     return (
-      <div className="admin-panel">
-        <header className="admin-header"><button onClick={() => setViewMode('customer')}>⬅ বের হোন</button><h2>ড্যাশবোর্ড</h2></header>
-        <div className="admin-tabs">
-          <button className={adminTab === 'orders' ? 'active' : ''} onClick={() => {setAdminTab('orders'); fetchAllOrders();}}>অর্ডারসমূহ</button>
-          <button className={adminTab === 'products' ? 'active' : ''} onClick={() => setAdminTab('products')}>পণ্য যোগ</button>
-        </div>
-        <div className="admin-body">
-          {adminTab === 'products' && (
-            <div className="form-card">
-              <h3>{editId ? "✏️ এডিট করুন" : "➕ নতুন পণ্য"}</h3>
-              <input type="text" placeholder="পণ্যের নাম" value={newP.name} onChange={e => setNewP({...newP, name: e.target.value})} />
-              <div className="two-col">
-                <input type="number" placeholder="দাম (৳)" value={newP.price} onChange={e => setNewP({...newP, price: e.target.value})} />
-                <select value={newP.unit} onChange={e => setNewP({...newP, unit: e.target.value})}>
-                  {unitList.map(u => <option key={u} value={u}>{u}</option>)}
-                </select>
-              </div>
-              <input type="number" placeholder="স্টক" value={newP.stock} onChange={e => setNewP({...newP, stock: e.target.value})} />
-              <input type="text" placeholder="ছবির লিংক" value={newP.image} onChange={e => setNewP({...newP, image: e.target.value})} />
-              <select value={newP.category} onChange={e => setNewP({...newP, category: e.target.value})}>
-                {categoriesList.map(c => <option key={c} value={c}>{c}</option>)}
+      <div className="admin-page">
+        <header className="app-header">
+          <button className="back-btn" onClick={() => setViewMode('customer')}>⬅</button>
+          <h2 className="logo">Admin Panel</h2>
+        </header>
+        <div className="admin-orders">
+          {allOrders.map(o => (
+            <div key={o.id} className="admin-o-card">
+              <p><b>আইডি:</b> #{o.id.slice(-5)} | <b>টাকা:</b> ৳{o.total}</p>
+              <p><b>নাম:</b> {o.userInfo.name} ({o.userPhone})</p>
+              <p><b>পণ্য:</b> {o.items.map(i => `${i.name}(${i.qty})`).join(', ')}</p>
+              <select defaultValue={o.status} onChange={async (e) => {
+                await updateDoc(doc(db, "orders", o.id), { status: e.target.value });
+                alert("স্ট্যাটাস আপডেট করা হয়েছে!");
+              }}>
+                <option value="Pending">Pending 🟡</option>
+                <option value="Confirmed">Confirmed 🔵</option>
+                <option value="Delivered">Delivered 🟢</option>
+                <option value="Cancelled">Cancelled 🔴</option>
               </select>
-              <button className="save-btn" onClick={saveProduct}>সেভ করুন</button>
-              {editId && <button className="cancel-btn" onClick={() => setEditId(null)}>বাতিল</button>}
             </div>
-          )}
-          {adminTab === 'orders' && (
-            <div className="order-management">
-              {allOrders.length === 0 ? <p>কোনো অর্ডার নেই</p> : allOrders.map(order => (
-                <div key={order.id} className="admin-order-card">
-                  <div className="o-header">
-                    <strong>ID: #{order.id.slice(-6).toUpperCase()}</strong>
-                    <select className={`status-badge ${getStatusColor(order.status)}`} value={order.status} onChange={(e) => updateOrderStatus(order.id, e.target.value)}>
-                      <option value="Pending">Pending</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Delivered">Delivered</option>
-                    </select>
-                  </div>
-                  <div className="o-customer">
-                    <p><b>নাম:</b> {order.customerInfo?.name}</p>
-                    <p><b>মোবাইল:</b> {order.customerInfo?.phone}</p>
-                    <p><b>ঠিকানা:</b> {order.customerInfo?.house}, {order.customerInfo?.area}, {order.customerInfo?.upazila}, {order.customerInfo?.district}</p>
-                  </div>
-                  <div className="o-items">
-                    {order.items.map((item, i) => <span key={i}>{item.name} x{item.qty}, </span>)}
-                  </div>
-                  <strong className="o-total">মোট: ৳{order.total}</strong>
-                </div>
-              ))}
-            </div>
-          )}
+          ))}
         </div>
       </div>
     );
   }
 
-  // --- CUSTOMER VIEW ---
   return (
-    <div className="App">
-      <div className={`drawer ${isDrawerOpen ? 'open' : ''}`}>
-        <div className="d-header"><h3>SAKIB STORE</h3><p>v{CURRENT_APP_VERSION}</p></div>
-        <div className="d-menu">
-          <div className="d-item" onClick={() => {setActiveTab('home'); setIsDrawerOpen(false);}}>🏠 হোম</div>
-          <div className="d-item" onClick={() => {setActiveTab('categories'); setIsDrawerOpen(false);}}>🗂️ ক্যাটাগরি</div>
-          <div className="d-item" onClick={() => {setActiveTab('profile'); setIsDrawerOpen(false);}}>👤 আমার প্রোফাইল</div>
-          <div className="d-item admin-link" onClick={() => {setViewMode('adminLogin'); setIsDrawerOpen(false);}}>🛡️ অ্যাডমিন প্যানেল</div>
-          <div className="d-item" onClick={() => setIsDrawerOpen(false)}>❌ বন্ধ করুন</div>
+    <div className="sakib-app">
+      {/* Auto Update Modal */}
+      {updateInfo.hasUpdate && (
+        <div className="update-modal-bg">
+          <div className="update-modal">
+            <h2>নতুন আপডেট! 🚀</h2>
+            <p>নতুন ভার্সন {updateInfo.version} পাওয়া যাচ্ছে। নতুন ফিচারের জন্য এখনই আপডেট করুন।</p>
+            <button onClick={() => window.open(updateInfo.url, '_blank')}>আপডেট করুন</button>
+          </div>
         </div>
-      </div>
-      {isDrawerOpen && <div className="overlay" onClick={() => setIsDrawerOpen(false)}></div>}
+      )}
 
+      {/* Header (১ম ৪ ছবির মতো) */}
       <header className="app-header">
         <button className="menu-btn" onClick={() => setIsDrawerOpen(true)}>☰</button>
-        <div className="brand-title"><h2>SAKIB STORE</h2></div>
-        <div className="cart-icon" onClick={() => setActiveTab('cart')}>🛒<span>{cart.length}</span></div>
+        <h2 className="logo">SAKIB STORE</h2>
+        <div className="cart-icon" onClick={() => setActiveTab('cart')}>🛒<span className="badge">{cart.length}</span></div>
       </header>
 
-      <main className="main-content">
-        {activeTab === 'home' && (
-          <>
-            <div className="search-container"><span className="icon">🔍</span><input type="text" placeholder="পণ্য খুঁজুন..." onChange={(e) => setSearchTerm(e.target.value)} /></div>
-            <div className="home-tab">
-              <div className="product-grid">
-                {filteredProducts.map(p => {
-                  const cItem = cart.find(c => c.id === p.id);
-                  return (
-                    <div key={p.id} className="product-card">
-                      <img src={p.image || 'https://via.placeholder.com/150'} alt={p.name} />
-                      <h4>{p.name}</h4>
-                      <div className="price-stock"><span className="price">৳{p.price}/{p.unit}</span><span className={`stock ${p.stock <= 0 ? 'out' : ''}`}>স্টক: {p.stock}</span></div>
-                      {cItem ? (
-                        <div className="qty-box"><button onClick={() => handleCart(p, 'remove')}>-</button><span>{cItem.qty}</span><button onClick={() => handleCart(p, 'add')}>+</button></div>
-                      ) : (
-                        <button className="add-btn" disabled={p.stock <= 0} onClick={() => handleCart(p, 'add')}>{p.stock <= 0 ? 'Out of Stock' : 'কার্টে যোগ করুন'}</button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </>
-        )}
+      {/* Side Menu */}
+      {isDrawerOpen && <div className="overlay" onClick={() => setIsDrawerOpen(false)}></div>}
+      <div className={`drawer ${isDrawerOpen ? 'open' : ''}`}>
+        <div className="drawer-head"><h3>সাকিব স্টোর</h3></div>
+        <div className="drawer-links">
+          <p onClick={() => {setActiveTab('home'); setIsDrawerOpen(false)}}>🏠 হোম পেজ</p>
+          <p onClick={() => {setActiveTab('categories'); setIsDrawerOpen(false)}}>🗂️ ক্যাটাগরি</p>
+          <p onClick={() => {setActiveTab('profile'); setIsDrawerOpen(false)}}>👤 প্রোফাইল</p>
+          <p className="admin-link" onClick={openAdmin}>🛡️ অ্যাডমিন লগইন</p>
+        </div>
+      </div>
 
-        {activeTab === 'categories' && (
-          <div className="categories-tab">
-            <h3 className="sec-title">পণ্য ক্যাটাগরি</h3>
-            <div className="cat-list">
-               <button className={selectedCategoryNav === 'সব' ? 'active-cat' : ''} onClick={() => {setSelectedCategoryNav('সব'); setActiveTab('home');}}>সব পণ্য</button>
-              {categoriesList.map(cat => (
-                <button key={cat} className={selectedCategoryNav === cat ? 'active-cat' : ''} onClick={() => {setSelectedCategoryNav(cat); setActiveTab('home');}}>
-                  {cat}
-                </button>
+      <main className="main-content">
+        {/* --- Home Tab --- */}
+        {activeTab === 'home' && (
+          <div className="home-page">
+            <div className="search-bar"><input placeholder="পণ্য খুঁজুন..." onChange={e => setSearchTerm(e.target.value)} /></div>
+            <div className="section-header">
+              <h3>{selectedCat}</h3>
+              <span onClick={() => setActiveTab('categories')} className="view-all">সব দেখুন</span>
+            </div>
+            <div className="product-grid">
+              {products.filter(p => (selectedCat === 'সব পণ্য' || p.category === selectedCat) && p.name.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
+                <div key={p.id} className="p-card">
+                  <div className="img-box"><img src={p.image} alt={p.name} /></div>
+                  <h4>{p.name}</h4>
+                  <p className="price">৳{p.price}/{p.unit}</p>
+                  <button className="add-btn" onClick={() => handleCart(p, 'add')}>কার্টে যোগ করুন</button>
+                </div>
               ))}
             </div>
           </div>
         )}
 
+        {/* --- Category Tab (১ম ৪ ছবির সুন্দর লিস্ট ভিউ) --- */}
+        {activeTab === 'categories' && (
+          <div className="category-page">
+            <h3>সকল ক্যাটাগরি</h3>
+            <div className="cat-list">
+              {categoriesList.map(c => (
+                <div key={c} className={`cat-list-item ${selectedCat === c ? 'active' : ''}`} onClick={() => {setSelectedCat(c); setActiveTab('home');}}>
+                  <span>{c}</span>
+                  <span className="arrow">➔</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* --- Cart Tab --- */}
         {activeTab === 'cart' && (
-          <div className="cart-tab">
-            <h3 className="sec-title">আপনার কার্ট</h3>
-            {cart.length === 0 ? <p className="empty">কার্ট খালি!</p> : (
-              <>
-                <div className="cart-list">
-                  {cart.map((item, i) => (
-                    <div key={i} className="c-row"><span>{item.name} <b>(x{item.qty})</b></span><span>৳{item.price * item.qty}</span></div>
-                  ))}
-                  <div className="c-row delivery-row"><span>ডেলিভারি চার্জ:</span><span>৳{DELIVERY_CHARGE}</span></div>
-                  <div className="c-total"><strong>সর্বমোট:</strong> <strong className="grand-total">৳{grandTotal}</strong></div>
+          <div className="cart-page">
+            <h3>🛒 শপিং কার্ট</h3>
+            {cart.length === 0 ? <p className="empty-msg">কার্ট খালি!</p> : cart.map(item => (
+              <div key={item.id} className="cart-item">
+                <div>
+                  <h4>{item.name}</h4>
+                  <p>৳{item.price} x {item.qty}</p>
                 </div>
-                <div className="checkout-form">
-                  <h4>ডেলিভারি তথ্য</h4>
-                  <input type="text" placeholder="আপনার পুরো নাম *" value={customerInfo.name} onChange={e=>setCustomerInfo({...customerInfo, name:e.target.value})} />
-                  <input type="number" placeholder="মোবাইল নম্বর *" value={customerInfo.phone} onChange={e=>setCustomerInfo({...customerInfo, phone:e.target.value})} />
-                  <div className="two-col">
-                    <input type="text" placeholder="বাড়ি নং / রাস্তা *" value={customerInfo.house} onChange={e=>setCustomerInfo({...customerInfo, house:e.target.value})} />
-                    <input type="text" placeholder="এলাকা *" value={customerInfo.area} onChange={e=>setCustomerInfo({...customerInfo, area:e.target.value})} />
-                  </div>
-                  <div className="two-col">
-                    <input type="text" placeholder="উপজেলা *" value={customerInfo.upazila} onChange={e=>setCustomerInfo({...customerInfo, upazila:e.target.value})} />
-                    <input type="text" placeholder="জেলা *" value={customerInfo.district} onChange={e=>setCustomerInfo({...customerInfo, district:e.target.value})} />
-                  </div>
-                  
-                  <div className="payment-section">
-                    <h4>পেমেন্ট মেথড:</h4>
-                    <label><input type="radio" name="payment" value="Cash on Delivery" defaultChecked onChange={e=>setPaymentMethod(e.target.value)} /> ক্যাশ অন ডেলিভারি</label>
-                  </div>
-                  <button className="order-btn" onClick={placeOrder}>অর্ডার কনফার্ম করুন (৳{grandTotal})</button>
+                <div className="qty-controls">
+                  <button onClick={() => handleCart(item, 'remove')}>-</button>
+                  <span>{item.qty}</span>
+                  <button onClick={() => handleCart(item, 'add')}>+</button>
                 </div>
-              </>
+              </div>
+            ))}
+            {cart.length > 0 && (
+              <div className="checkout-box">
+                <h4>ডেলিভারি ঠিকানা</h4>
+                <input placeholder="আপনার নাম" value={userInfo.name} onChange={e => setUserInfo({...userInfo, name: e.target.value})} />
+                <input placeholder="মোবাইল নম্বর" value={userInfo.phone} onChange={e => setUserInfo({...userInfo, phone: e.target.value})} />
+                <textarea placeholder="বিস্তারিত ঠিকানা (এলাকা, গ্রাম, বাড়ি)" value={userInfo.area} onChange={e => setUserInfo({...userInfo, area: e.target.value})} />
+                <div className="bill-summary">
+                  <p>পণ্য: ৳{cart.reduce((a,c)=>a+(c.price*c.qty),0)}</p>
+                  <p>ডেলিভারি: ৳{DELIVERY_CHARGE}</p>
+                  <h3>মোট: ৳{cart.reduce((a,c)=>a+(c.price*c.qty),0)+DELIVERY_CHARGE}</h3>
+                </div>
+                <button className="confirm-btn" onClick={submitOrder}>অর্ডার কনফার্ম করুন</button>
+              </div>
             )}
           </div>
         )}
 
+        {/* --- Profile Tab --- */}
         {activeTab === 'profile' && (
-          <div className="profile-tab">
-            {!customer ? (
-              <div className="login-screen-wrapper">
-                <div className="pro-login-card">
-                  <h3>স্বাগতম! লগইন করুন</h3>
-                  <p>আপনার অর্ডার হিস্ট্রি দেখতে ও সহজে কেনাকাটা করতে লগইন করুন।</p>
-                  
-                  {/* reCAPTCHA কন্টেইনার (এটি ফায়ারবেস অটোমেটিক হাইড করে রাখবে) */}
+          <div className="profile-page">
+            {!user ? (
+              <div className="login-container">
+                <div className="login-card">
+                  <h3>লগইন করুন</h3>
                   <div id="recaptcha-container"></div>
-                  
-                  <input type="number" placeholder="আপনার মোবাইল নম্বর (যেমন: 017XXXXXXX)" value={loginPhone} onChange={e=>setLoginPhone(e.target.value)} disabled={otpSent} />
-                  
-                  {!otpSent ? (
-                    <button className="primary-btn" onClick={sendOtp}>ভেরিফিকেশন কোড পাঠান</button>
-                  ) : (
+                  <input placeholder="মোবাইল নম্বর (017...)" onChange={e => setLoginPhone(e.target.value)} />
+                  {!otpSent ? <button onClick={sendOtp}>OTP পাঠান</button> : (
                     <>
-                      <input type="text" placeholder="মেসেজে আসা ৬ ডিজিটের কোড দিন" value={otpCode} onChange={e=>setOtpCode(e.target.value)} />
-                      <button className="primary-btn" onClick={handleLogin}>যাচাই করুন ও লগইন করুন</button>
+                      <input placeholder="৬ ডিজিট কোড" onChange={e => setOtpCode(e.target.value)} />
+                      <button onClick={verifyOtp}>ভেরিফাই করুন</button>
                     </>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="pro-details-advanced">
-                <div className="cover-photo-area">
-                  <img src={customer.cover || 'https://via.placeholder.com/400x150'} alt="Cover" className="cover-img" />
-                  <label className="edit-cover-btn">📷 কভার পরিবর্তন<input type="file" accept="image/*" onChange={(e) => saveProfileImage('cover', e)} hidden /></label>
-                  
-                  <div className="pro-pic-area">
-                    <img src={customer.pic || 'https://via.placeholder.com/100'} alt="Profile" className="pro-img" />
-                    <label className="edit-pro-btn">📷<input type="file" accept="image/*" onChange={(e) => saveProfileImage('pic', e)} hidden /></label>
-                  </div>
+              <div className="user-dashboard">
+                <div className="profile-header-fb">
+                  <div className="cover-img"><img src="https://via.placeholder.com/400x150/27ae60/ffffff?text=Sakib+Store" alt="Cover" /></div>
+                  <div className="profile-img"><img src="https://via.placeholder.com/150/ffffff/27ae60?text=User" alt="Profile" /></div>
+                  <h3>{userInfo.name || 'সম্মানিত গ্রাহক'}</h3>
+                  <p>{user.phone}</p>
                 </div>
-                
-                <div className="user-info-text">
-                  <h3>{customerInfo.name || 'সম্মানিত গ্রাহক'}</h3>
-                  <p>{customer.phone}</p>
-                  <button onClick={handleLogout} className="logout-sm-btn">লগআউট</button>
+                <div className="history-section">
+                  <h4>📦 আমার অর্ডারসমূহ</h4>
+                  {userOrders.length === 0 ? <p>কোনো অর্ডার নেই।</p> : userOrders.map(o => (
+                    <div key={o.id} className="history-card">
+                      <div className="hc-top"><span>{o.date}</span> <span className={`status-badge ${o.status.toLowerCase()}`}>{o.status}</span></div>
+                      <p className="hc-items">{o.items.map(i => i.name).join(', ')}</p>
+                      <h4>মোট: ৳{o.total}</h4>
+                    </div>
+                  ))}
                 </div>
-
-                <div className="customer-orders-section">
-                  <h4 className="sec-title">📦 আমার অর্ডারসমূহ</h4>
-                  {customerOrders.length === 0 ? <p className="empty-msg">আপনি এখনো কোনো অর্ডার করেননি।</p> : (
-                    customerOrders.map(order => (
-                      <div key={order.id} className="my-order-card">
-                        <div className="m-header">
-                          <span className="o-date">{order.date}</span>
-                          <span className={`status-badge ${getStatusColor(order.status)}`}>{order.status}</span>
-                        </div>
-                        <p className="o-id">Order ID: #{order.id.slice(-6).toUpperCase()}</p>
-                        <div className="m-items">
-                          {order.items.map((item, i) => <span key={i}>{item.name} (x{item.qty}) {i < order.items.length-1 ? ', ' : ''}</span>)}
-                        </div>
-                        <div className="m-footer"><strong>মোট বিল: ৳{order.total}</strong></div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <button className="logout-btn" onClick={() => {signOut(auth); setUser(null); setUserOrders([]);}}>লগআউট</button>
               </div>
             )}
           </div>
         )}
       </main>
 
-      <footer className="footer">
-        <div onClick={()=>setActiveTab('home')} className={activeTab==='home'?'active':''}>🏠<small>হোম</small></div>
-        <div onClick={()=>setActiveTab('categories')} className={activeTab==='categories'?'active':''}>🗂️<small>ক্যাটাগরি</small></div>
-        <div onClick={()=>setActiveTab('cart')} className={activeTab==='cart'?'active':''}>🛒<small>কার্ট</small></div>
-        <div onClick={()=>setActiveTab('profile')} className={activeTab==='profile'?'active':''}>👤<small>প্রোফাইল</small></div>
+      {/* --- Bottom Navigation (১ম ৪ ছবির একদম হুবহু) --- */}
+      <footer className="bottom-nav">
+        <div className={`nav-item ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+          <span className="icon">🏠</span><small>হোম</small>
+        </div>
+        <div className={`nav-item ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => setActiveTab('categories')}>
+          <span className="icon">🗂️</span><small>ক্যাটাগরি</small>
+        </div>
+        <div className={`nav-item ${activeTab === 'cart' ? 'active' : ''}`} onClick={() => setActiveTab('cart')}>
+          <span className="icon">🛒</span><small>কার্ট</small>
+        </div>
+        <div className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+          <span className="icon">👤</span><small>প্রোফাইল</small>
+        </div>
       </footer>
     </div>
   );
 }
+
 export default App;
