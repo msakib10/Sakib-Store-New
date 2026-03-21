@@ -477,3 +477,116 @@ body {
 .drawer-links p { padding: 15px 20px; border-bottom: 1px solid #f0f0f0; margin: 0; font-size: 16px; font-weight: 600; cursor: pointer; color: #444; }
 .update-modal { background: white; padding: 25px; border-radius: 12px; text-align: center; width: 80%; }
 .empty-text { text-align: center; color: #888; margin-top: 30px; }
+/* --- মূল বডি সেটআপ --- */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Hind Siliguri', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* বাংলা ফন্টের জন্য ভালো */
+  background-color: #f0f4f8; /* হালকা নীলাভ গ্রে ব্যাকগ্রাউন্ড */
+}
+
+/* --- হেডার সেকশন --- */
+header {
+  background: linear-gradient(135deg, #1a237e 0%, #2e7d32 100%) !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  border-bottom-left-radius: 15px;
+  border-bottom-right-radius: 15px;
+}
+
+/* --- স্ক্রলিং নোটিশ --- */
+marquee {
+  background: #e3f2fd !important; /* হালকা নীল */
+  color: #1a237e !important; /* গাঢ় নীল */
+  font-weight: bold;
+  border-bottom: 1px solid #bbdefb;
+}
+
+/* --- ক্যাটাগরি বাটন --- */
+button[style*="backgroundColor: rgb(46, 125, 50)"] { /* একটিভ সবুজ বাটন */
+  background: linear-gradient(to right, #2e7d32, #1b5e20) !important;
+  box-shadow: 0 4px 15px rgba(46, 125, 50, 0.3);
+}
+
+button[style*="backgroundColor: rgb(255, 255, 255)"] { /* ইন-একটিভ সাদা বাটন */
+  border: 1.5px solid #1a237e !important;
+  color: #1a237e !important;
+}
+
+/* --- প্রোডাক্ট কার্ড --- */
+div[style*="boxShadow: 0 2px 8px rgba(0,0,0,0.1)"] {
+  border: 1px solid #e0e0e0;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border-radius: 12px !important;
+}
+
+div[style*="boxShadow: 0 2px 8px rgba(0,0,0,0.1)"]:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15) !important;
+  border-color: #1a237e;
+}
+
+/* --- কার্ট এবং অ্যাকশন বাটন --- */
+button {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+button:active {
+  transform: scale(0.95);
+}
+
+/* কার্টে যোগ করুন বাটন */
+button[style*="backgroundColor: rgb(46, 125, 50)"] {
+  background-color: #2e7d32 !important;
+}
+
+/* --- বটম নেভিগেশন --- */
+nav {
+  background: #ffffff !important;
+  border-top: 2px solid #1a237e !important;
+  height: 60px;
+}
+
+nav div {
+  font-size: 22px;
+  color: #1a237e; /* নীল আইকন */
+  transition: color 0.3s;
+}
+
+nav div:hover {
+  color: #2e7d32; /* হোভারে সবুজ */
+}
+
+/* --- সাইড ড্রয়ার (Sidebar) --- */
+div[style*="width: 250px"] {
+  background: linear-gradient(to bottom, #ffffff, #e3f2fd) !important;
+}
+
+div[style*="width: 250px"] p {
+  padding: 12px;
+  margin: 5px 0;
+  border-radius: 8px;
+  color: #1a237e;
+  font-weight: 600;
+}
+
+div[style*="width: 250px"] p:hover {
+  background-color: #2e7d32;
+  color: white;
+}
+
+/* --- ইনপুট বক্স --- */
+input, textarea {
+  border: 2px solid #bbdefb !important;
+  outline: none;
+}
+
+input:focus, textarea:focus {
+  border-color: #1a237e !important;
+  box-shadow: 0 0 8px rgba(26, 35, 126, 0.2);
+}
+
+/* --- ওটিপি এবং পেমেন্ট বাটন --- */
+button[style*="background: rgb(46, 125, 50)"] {
+  background: #1a237e !important; /* প্রাইমারি নীল বাটন */
+}
