@@ -1133,3 +1133,22 @@ body {
   gap: 10px;
   padding: 10px;
 }
+/* Product Grids */
+.product-grid-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+/* Status Colors */
+.st-pending { background: #f39c12 !important; border: 1px solid #e67e22; }
+.st-confirmed { background: #3498db !important; border: 1px solid #2980b9; }
+.st-delivery { background: #9b59b6 !important; border: 1px solid #8e44ad; }
+.st-delivered { background: #27ae60 !important; border: 1px solid #2ecc71; }
+.st-cancelled { background: #e74c3c !important; border: 1px solid #c0392b; }
+
+/* Custom Scrollbar for horizontal categories */
+.home-categories::-webkit-scrollbar {
+  height: 0px;
+  background: transparent;
+}
