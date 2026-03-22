@@ -590,3 +590,218 @@ input:focus, textarea:focus {
 button[style*="background: rgb(46, 125, 50)"] {
   background: #1a237e !important; /* প্রাইমারি নীল বাটন */
 }
+* {
+  box-sizing: border-box;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body, html {
+  margin: 0;
+  padding: 0;
+  background-color: #f4f7f6;
+}
+
+.sakib-app {
+  max-width: 600px;
+  margin: 0 auto;
+  background: #fff;
+  min-height: 100vh;
+  position: relative;
+  box-shadow: 0 0 15px rgba(0,0,0,0.1);
+}
+
+/* Header & Drawer Elements */
+.drawer-btn {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background: rgba(0,0,0,0.4);
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 10;
+}
+
+.cart-icon {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: rgba(0,0,0,0.4);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  z-index: 10;
+}
+
+.cart-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ff4d4d;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 50%;
+  font-weight: bold;
+}
+
+.notice-bar {
+  background: #fff9c4;
+  color: #d35400;
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #eee;
+}
+
+/* Drawer CSS */
+.drawer-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 99;
+}
+.drawer {
+  position: fixed;
+  top: 0; left: -250px; width: 250px; height: 100%;
+  background: #fff;
+  transition: 0.3s ease;
+  z-index: 100;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+}
+.drawer.open { left: 0; }
+.drawer-header {
+  background: #27ae60;
+  color: #fff;
+  padding: 20px;
+  font-size: 20px;
+  font-weight: bold;
+}
+.drawer-links p {
+  padding: 15px 20px;
+  margin: 0;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  font-size: 16px;
+}
+.drawer-links p:hover { background: #f9f9f9; }
+.admin-link { color: #c0392b; font-weight: bold; }
+
+/* Product Grid Home */
+.search-container {
+  display: flex;
+  justify-content: center;
+  padding: 15px;
+  background: #fdfdfd;
+}
+.search-input-field {
+  width: 100%;
+  padding: 12px 15px 12px 40px;
+  border: 1px solid #ccc;
+  border-radius: 25px;
+  font-size: 15px;
+  outline: none;
+}
+.search-icon {
+  position: absolute;
+  left: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #888;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  padding: 15px;
+}
+.p-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  text-align: center;
+}
+.p-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: contain;
+  margin-bottom: 10px;
+}
+.p-card h4 {
+  margin: 5px 0;
+  font-size: 14px;
+  color: #333;
+}
+.p-card p {
+  color: #e74c3c;
+  font-weight: bold;
+  margin: 5px 0 10px 0;
+}
+.add-btn {
+  width: 100%;
+  padding: 8px;
+  background: #27ae60;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* Bottom Navigation */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  max-width: 600px;
+  background: #fff;
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 0;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  z-index: 50;
+}
+.nav-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #888;
+  cursor: pointer;
+  font-size: 20px;
+}
+.nav-icon span { font-size: 12px; margin-top: 4px; }
+.nav-icon.active { color: #27ae60; }
+
+/* Buttons & Inputs */
+.primary-btn {
+  background: #27ae60; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;
+}
+.cancel-btn {
+  background: #e74c3c; color: #fff; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;
+}
+
+/* Status Colors */
+.st-pending { background-color: #fff3cd; color: #856404; }
+.st-confirmed { background-color: #cce5ff; color: #004085; }
+.st-delivery { background-color: #ffe8cc; color: #d35400; }
+.st-delivered { background-color: #d4edda; color: #155724; }
+.st-cancelled { background-color: #f8d7da; color: #721c24; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.update-modal {
+  background: #fff; padding: 30px; border-radius: 12px; text-align: center;
+}
