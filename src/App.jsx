@@ -6,7 +6,7 @@ import './App.css';
 
 // --- ফায়ারবেস কনফিগারেশন ---
 const firebaseConfig = {
-  apiKey: "AIzaSyBSKT8knhfyLHSuz-Z8nnj3jrYn2KBcP0M",
+  apiKey: "AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
   authDomain: "sakib-store1.firebaseapp.com",
   projectId: "sakib-store1",
   storageBucket: "sakib-store1.firebasestorage.app",
