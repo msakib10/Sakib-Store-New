@@ -1115,3 +1115,21 @@ body {
   border: 1px solid #ddd;
   border-radius: 8px;
 }
+.sakib-app {
+  max-width: 100%; /* কন্টেইনার যেন পুরো স্ক্রিন পায় */
+  margin: 0 auto;
+  overflow-x: hidden;
+}
+
+.main-content {
+  padding: 10px 5px; /* সাইডের অতিরিক্ত গ্যাপ কমানোর জন্য */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr); /* মোবাইলে দুই কলামে দেখাবে */
+  gap: 10px;
+  padding: 10px;
+}
