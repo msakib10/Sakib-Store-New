@@ -379,7 +379,7 @@ export default function App() {
           <h2>🛡️ অ্যাডমিন লগইন</h2>
           <input type="password" placeholder="পাসওয়ার্ড..." value={adminPass} onChange={e => setAdminPass(e.target.value)} />
           <button className="btn-primary" onClick={() => { if (adminPass === 'sakib123') { setViewMode('admin'); fetchAllOrders(); setAdminPass(''); } else alert('ভুল পাসওয়ার্ড!'); }}>লগইন</button>
-          <button className="btn-outline" onClick={() => {setViewMode('customer'); changeTab('home');}}>ফিরে যান</button>
+          <button className="btn-outline mt-15" onClick={() => {setViewMode('customer'); changeTab('home');}}>ফিরে যান</button>
         </div>
       </div>
     );
@@ -829,12 +829,32 @@ export default function App() {
 
         {/* --- ABOUT US TAB --- */}
         {activeTab === 'about' && (
-          <div className="page-about p-20 text-center">
-            <h2>About Us</h2>
-            <p className="mt-20 text-muted">সাকিব স্টোর একটি বিশ্বস্ত অনলাইন শপিং প্ল্যাটফর্ম। আমরা মানসম্মত পণ্য সঠিক সময়ে গ্রাহকের দোরগোড়ায় পৌঁছে দিতে বদ্ধপরিকর।</p>
+          <div className="about-view" style={{ padding: '30px 20px', textAlign: 'center', minHeight:'80vh', background:'#fff' }}>
+            <h2 style={{ color: '#27ae60', marginBottom:'20px' }}>About Us</h2>
+            <img src={headerImage} alt="Sakib Store" style={{width:'100px', height:'100px', borderRadius:'50%', marginBottom:'20px', objectFit:'cover'}}/>
+            <p style={{lineHeight:'1.6', color:'#555', fontSize:'16px'}}>সাকিব স্টোর একটি বিশ্বস্ত অনলাইন গ্রোসারি শপ। আমরা সাশ্রয়ী মূল্যে ফ্রেশ পণ্য আপনাদের দুয়ারে পৌঁছে দেই।</p>
+            
+            <div style={{ background:'#f9f9f9', padding:'20px', borderRadius:'10px', marginTop:'30px', border:'1px solid #eee' }}>
+              <p style={{ fontWeight: 'bold', fontSize:'18px', color:'#333', marginBottom:'15px' }}>যোগাযোগ:</p>
+              <p style={{margin:'5px 0'}}>📞 ০১৭২৪৪০৯২১৯</p>
+              <p style={{margin:'5px 0'}}>📞 ০১৭৩৫৩৭৬০৭৯</p>
+              <p style={{margin:'5px 0'}}>📞 ০১৭২৩৫৩৯৭৩৮</p>
+            </div>
           </div>
         )}
       </main>
+
+      {/* --- Bottom Navigation --- */}
+      <footer className="bottom-nav">
+        <div className={`nav-icon ${activeTab === 'home' ? 'active' : ''}`} onClick={() => changeTab('home')}>🏠<span>হোম</span></div>
+        <div className={`nav-icon ${activeTab === 'categories' ? 'active' : ''}`} onClick={() => changeTab('categories')}>🗂️<span>ক্যাটাগরি</span></div>
+        <div className={`nav-icon ${activeTab === 'cart' ? 'active' : ''}`} onClick={() => changeTab('cart')} style={{position:'relative'}}>
+          🛒<span>কার্ট</span>
+          {cart.length > 0 && <span style={{position:'absolute', top:'-5px', right:'-5px', background:'#e74c3c', color:'#fff', fontSize:'10px', width:'18px', height:'18px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:'bold'}}>{toBanglaNum(cart.length)}</span>}
+        </div>
+        <div className={`nav-icon ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => changeTab('profile')}>👤<span>প্রোফাইল</span></div>
+      </footer>
+
     </div>
   );
 }
