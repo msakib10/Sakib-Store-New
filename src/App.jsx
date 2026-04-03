@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { initializeApp } from "firebase/app";
 import {
@@ -44,7 +43,13 @@ const parseUnit = (u) => {
   }
   return {baseQty:1, text:u, step:1};
 };
-const bn = (n) => { if(n==null) return '০'; return Number(n).toFixed(0).replace(/\d/g,d=>'০১২৩৪৫৬৭৮৯'[d]); };
+
+// FIX: সাদা স্ক্রিন বন্ধ করার জন্য নিরাপদ bn ফাংশন
+const bn = (n) => { 
+  if (n == null || isNaN(n) || n === '') return '০'; 
+  return Number(n).toFixed(0).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]); 
+};
+
 const dc = (loc) => {
   if (["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর"].includes(loc)) return 20;
   if (loc==="সিংগাইর উপজেলার ভেতরে") return 40;
@@ -61,8 +66,10 @@ export default function App() {
   const [products, setProducts]     = useState([]);
   const [headerImg, setHeaderImg]   = useState('https://placehold.co/820x312/1a7a43/ffffff?text=Sakib+Store');
   const [notice, setNotice]         = useState('সাকিব স্টোরে আপনাকে স্বাগতম! 🌿 সেরা মানের পণ্য, সাশ্রয়ী মূল্যে।');
-  const [notif, setNotif]           = useState({text:'',expiresAt:0,show:false});
-  const [coverPhotos, setCoverPhotos] = useState([]); // admin-managed cover photo URLs
+  
+  // FIX: মাল্টিপল নোটিফিকেশন সিস্টেমের জন্য Array ব্যবহার করা হয়েছে
+  const [notifications, setNotifications] = useState([]);
+  const [coverPhotos, setCoverPhotos] = useState([]); 
   const [showNotifModal, setShowNotifModal] = useState(false);
 
   // Nav
@@ -169,7 +176,12 @@ export default function App() {
         const d=s.data();
         if(d.header) setHeaderImg(d.header);
         if(d.notice) setNotice(d.notice);
-        if(d.notification){setNotif({...d.notification,show:Date.now()<=d.notification.expiresAt});}
+        // FIX: পুরনো ও নতুন নোটিফিকেশন লোড করার লজিক
+        if(d.notifications){
+          setNotifications(d.notifications);
+        } else if(d.notification) {
+          setNotifications([d.notification]);
+        }
         if(d.coverPhotos) setCoverPhotos(d.coverPhotos);
       }
     }catch(e){console.error('loadSettings',e);}
@@ -311,11 +323,18 @@ export default function App() {
     }catch(e){showToast(e.message,'error');}
   };
 
+  // FIX: একাধিক নোটিফিকেশন পুশ করার জন্য আপডেট করা লজিক
   const sendNotif=async()=>{
     if(!newNotif.text) return;
-    const nd={text:newNotif.text,expiresAt:Date.now()+newNotif.durationMins*60000};
-    await setDoc(doc(db,'settings','general'),{notification:nd},{merge:true});
-    setNotif({...nd,show:true});showToast('নোটিফিকেশন পাঠানো হয়েছে! ✅');
+    const newNotice = {
+      id: Date.now(),
+      text: newNotif.text,
+      expiresAt: Date.now() + (newNotif.durationMins * 60000)
+    };
+    const updatedNotifs = [...notifications, newNotice];
+    await setDoc(doc(db,'settings','general'),{notifications: updatedNotifs},{merge:true});
+    setNotifications(updatedNotifs);
+    showToast('নোটিফিকেশন পাঠানো হয়েছে! ✅');
     setNewNotif({text:'',durationMins:60});
   };
 
@@ -349,8 +368,9 @@ export default function App() {
     return(
       <div className={`product-card ${out?'out-of-stock':''}`}>
         <div className="p-img-box">
+          {/* FIX: onError infinite loop বন্ধ করা হয়েছে */}
           <img src={p.image||'https://placehold.co/120x120/e8f5e9/27ae60?text=P'} alt={p.name}
-            onError={e=>{e.target.src='https://placehold.co/120x120/e8f5e9/27ae60?text=P';}}/>
+            onError={e=>{e.currentTarget.onerror = null; e.currentTarget.src='https://placehold.co/120x120/e8f5e9/27ae60?text=P';}}/>
         </div>
         {out&&<div className="out-badge">স্টক শেষ</div>}
         <h4 className="p-name">{p.name}</h4>
@@ -374,12 +394,18 @@ export default function App() {
     );
   };
 
+  // FIX: p.name undefined থাকলে যেন সাদা স্ক্রিন না হয়
   const filtered=products.filter(p=>{
     const c=homeCat==='সব পণ্য'||p.category===homeCat;
-    const s=!search||p.name.toLowerCase().includes(search.toLowerCase());
+    const s=!search||(p.name && p.name.toLowerCase().includes(search.toLowerCase()));
     return c&&s;
   });
+  
   const isHome=tab==='home';
+
+  // FIX: অ্যাক্টিভ নোটিফিকেশন ফিল্টার করা হচ্ছে (যাদের সময় শেষ হয়নি)
+  const activeNotifs = notifications.filter(n => Date.now() <= n.expiresAt);
+  const hasUnread = activeNotifs.length > 0;
 
   // ══════════════════════════════════════════════════════════════════════════
   // ADMIN LOGIN
@@ -477,12 +503,14 @@ service cloud.firestore {
                 {allOrders.filter(o=>adminFilter==='All'||o.status===adminFilter).map(order=>(
                   <div key={order.id} className={`admin-order-card ${stCls(order.status)}`}>
                     <div className="o-header">
-                      <strong>#{order.id.slice(-6).toUpperCase()}</strong>
+                      {/* FIX: order.id যদি ফাঁকা থাকে তার সেফটি */}
+                      <strong>#{String(order.id).slice(-6).toUpperCase()}</strong>
                       <span className="o-date">{order.date}</span>
                     </div>
                     <p><b>নাম:</b> {order.userInfo?.name} | <b>মোবাইল:</b> {order.userInfo?.phone}</p>
                     <p><b>ঠিকানা:</b> {order.userInfo?.finalLocation}, {order.userInfo?.address}, {order.userInfo?.area}, {order.userInfo?.district}</p>
-                    <p className="o-items-text"><b>পণ্য:</b> {order.items?.map(i=>`${i.name}(${i.qty}${parseUnit(i.unit).text})`).join(', ')}</p>
+                    {/* FIX: order.items এরর হ্যান্ডেলিং */}
+                    <p className="o-items-text"><b>পণ্য:</b> {Array.isArray(order.items) && order.items.map(i=>`${i.name}(${i.qty}${parseUnit(i.unit).text})`).join(', ')}</p>
                     <p><b>পেমেন্ট:</b> <span className="highlight-text">{order.paymentMethod}</span> | <b>মোট:</b> ৳{order.total}</p>
                     {(order.paymentMethod==='Bkash'||order.paymentMethod==='Nogod')&&(
                       <p className="trx-box">TrxID: {order.userInfo?.transactionId} | Sender: {order.userInfo?.senderNumber}</p>
@@ -516,11 +544,10 @@ service cloud.firestore {
                 <div className="admin-card">
                   <h4>🖼️ হেডার ছবি (URL)</h4>
                   <input type="text" placeholder="ছবির লিঙ্ক..." value={headerImg} onChange={e=>setHeaderImg(e.target.value)}/>
-                  {/* Preview of header image */}
                   {headerImg&&(
                     <div className="header-preview">
                       <img src={headerImg} alt="header preview"
-                        onError={e=>{e.target.style.display='none';}}
+                        onError={e=>{e.currentTarget.style.display='none';}}
                         style={{width:'100%',height:80,objectFit:'cover',borderRadius:8,marginTop:8}}/>
                     </div>
                   )}
@@ -536,7 +563,6 @@ service cloud.firestore {
                   <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
                 </div>
 
-                {/* Cover photos management */}
                 <div className="admin-card">
                   <h4>🖼️ কভার ফটো ম্যানেজমেন্ট</h4>
                   <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>গ্রাহকরা এখান থেকে কভার ফটো বেছে নিতে পারবে।</p>
@@ -548,7 +574,7 @@ service cloud.firestore {
                   <div className="cover-admin-grid">
                     {coverPhotos.map((url,i)=>(
                       <div key={i} className="cover-admin-item">
-                        <img src={url} alt={`cover-${i}`} onError={e=>{e.target.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/>
+                        <img src={url} alt={`cover-${i}`} onError={e=>{e.currentTarget.onerror = null; e.currentTarget.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/>
                         <button onClick={()=>removeCoverPhoto(i)}>✕</button>
                       </div>
                     ))}
@@ -572,7 +598,7 @@ service cloud.firestore {
                     <input type="number" placeholder="স্টক" value={newP.stock} onChange={e=>setNewP({...newP,stock:+e.target.value})}/>
                   </div>
                   <input type="text" placeholder="ছবির URL" className="mb-10" value={newP.image} onChange={e=>setNewP({...newP,image:e.target.value})}/>
-                  {newP.image&&<img src={newP.image} alt="preview" style={{width:'100%',height:60,objectFit:'cover',borderRadius:8,marginBottom:8}} onError={e=>{e.target.style.display='none';}}/>}
+                  {newP.image&&<img src={newP.image} alt="preview" style={{width:'100%',height:60,objectFit:'cover',borderRadius:8,marginBottom:8}} onError={e=>{e.currentTarget.style.display='none';}}/>}
                   <div className="flex-row gap-10">
                     <button className="btn-primary flex-1" onClick={saveProduct}>{editId?"আপডেট":"যোগ করুন"}</button>
                     {editId&&<button className="btn-danger" onClick={()=>{setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});}}>বাতিল</button>}
@@ -585,10 +611,10 @@ service cloud.firestore {
             <div className="stock-list-grid">
               {products.map(p=>(
                 <div key={p.id} className="stock-item-row">
-                  <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.target.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
+                  <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.currentTarget.onerror = null; e.currentTarget.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
                   <div className="si-details">
                     <strong>{p.name}</strong>
-                    <p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#e74c3c':'inherit',fontWeight:700}}>{p.stock}</span></p>
+                    <p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#e74c3c':'inherit',fontWeight:700}}>{bn(p.stock)}</span></p>
                   </div>
                   <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP(p);window.scrollTo(0,0);}}>Edit</button>
                   <button className="btn-del" onClick={async()=>{if(window.confirm("ডিলিট করবেন?")){await deleteDoc(doc(db,'products',p.id));loadProducts();}}}>Del</button>
@@ -643,7 +669,7 @@ service cloud.firestore {
                       setInfo(upd);saveProfile(upd);
                       setShowCoverPicker(false);
                     }}>
-                    <img src={url} alt={`cover-${i}`} onError={e=>{e.target.src='https://placehold.co/120x60/e8f5e9/27ae60?text=err';}}/>
+                    <img src={url} alt={`cover-${i}`} onError={e=>{e.currentTarget.onerror = null; e.currentTarget.src='https://placehold.co/120x60/e8f5e9/27ae60?text=err';}}/>
                     {info.coverPhoto===url&&<div className="cover-check">✓</div>}
                   </div>
                 ))}
@@ -654,12 +680,25 @@ service cloud.firestore {
         </div>
       )}
 
-      {/* Notification Modal */}
+      {/* Notification Modal (FIXED FOR MULTIPLE NOTIFICATIONS) */}
       {showNotifModal&&(
         <div className="modal-bg" onClick={()=>setShowNotifModal(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
             <h3 className="text-green mb-10">🔔 নোটিফিকেশন</h3>
-            {notif.show&&notif.text?<p style={{lineHeight:1.6}}>{notif.text}</p>:<p className="text-muted">এই মুহূর্তে কোনো নোটিফিকেশন নেই।</p>}
+            <div style={{maxHeight:'60vh', overflowY:'auto'}}>
+              {activeNotifs.length > 0 ? (
+                activeNotifs.map((n, idx) => (
+                  <div key={n.id || idx} style={{padding:'12px', background:'var(--green-pale)', borderRadius:'8px', marginBottom:'10px', textAlign:'left'}}>
+                    <p style={{lineHeight:1.6, margin:0, color:'#333'}}>{n.text}</p>
+                    <small style={{color:'var(--muted)', fontSize:'11px', display:'block', marginTop:'5px'}}>
+                      মেয়াদ: {new Date(n.expiresAt).toLocaleString('bn-BD')}
+                    </small>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted text-center mt-20 mb-20">এই মুহূর্তে কোনো নতুন নোটিফিকেশন নেই।</p>
+              )}
+            </div>
             <button className="btn-primary mt-20" onClick={()=>setShowNotifModal(false)}>ঠিক আছে</button>
           </div>
         </div>
@@ -681,17 +720,16 @@ service cloud.firestore {
         </ul>
       </div>
 
-      {/* Header — full cover only on home */}
+      {/* Header */}
       {isHome?(
         <header className="main-header">
-          {/* FIX: use <img> tag for header, not background-image (avoids CORS) */}
           <img src={headerImg} alt="header" className="header-bg-img"
-            onError={e=>{e.target.style.display='none';}}/>
+            onError={e=>{e.currentTarget.style.display='none';}}/>
           <div className="header-overlay">
             <button className="icon-btn" onClick={()=>setDrawer(true)}>☰</button>
             <div className="header-title">সাকিব স্টোর</div>
             <button className="icon-btn notif-btn" onClick={()=>setShowNotifModal(true)}>
-              🔔{notif.show&&<span className="notif-dot"/>}
+              🔔{hasUnread&&<span className="notif-dot"/>}
             </button>
           </div>
         </header>
@@ -700,7 +738,7 @@ service cloud.firestore {
           <button className="icon-btn-dark" onClick={()=>setDrawer(true)}>☰</button>
           <div className="mini-header-title">সাকিব স্টোর</div>
           <button className="icon-btn-dark notif-btn" onClick={()=>setShowNotifModal(true)}>
-            🔔{notif.show&&<span className="notif-dot-dark"/>}
+            🔔{hasUnread&&<span className="notif-dot-dark"/>}
           </button>
         </header>
       )}
@@ -773,7 +811,8 @@ service cloud.firestore {
                 <div className="cart-items-list">
                   {cart.map(item=>(
                     <div key={item.id} className="cart-item">
-                      <img src={item.image||'https://placehold.co/50x50/e8f5e9/27ae60?text=P'} alt={item.name} className="cart-item-img"/>
+                      <img src={item.image||'https://placehold.co/50x50/e8f5e9/27ae60?text=P'} alt={item.name} className="cart-item-img"
+                        onError={e=>{e.currentTarget.onerror = null; e.currentTarget.src='https://placehold.co/50x50/e8f5e9/27ae60?text=P';}}/>
                       <div className="c-info">
                         <strong>{item.name}</strong>
                         <p className="text-muted">{bn(item.qty)}{parseUnit(item.unit).text}</p>
@@ -849,7 +888,7 @@ service cloud.firestore {
               <div className="auth-screen text-center">
                 <div className="auth-logo">🛒</div>
                 <h2 className="mb-10">লগইন করুন</h2>
-                <p className="text-muted mb-20">অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন।</p>
+                <p className="text-muted mb-20">অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন.</p>
                 <button className="btn-google mb-15" onClick={googleLogin}>
                   <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="20"/>
                   Google দিয়ে লগইন করুন
@@ -860,7 +899,6 @@ service cloud.firestore {
               </div>
             ):(
               <div className="profile-dashboard">
-                {/* Cover photo section */}
                 <div className="profile-header-box">
                   <div className="cover-photo" style={{
                     backgroundImage: info.coverPhoto ? `url(${info.coverPhoto})` : 'linear-gradient(135deg,#1a7a43,#27ae60)',
@@ -872,7 +910,6 @@ service cloud.firestore {
                   </div>
 
                   <div className="avatar-section">
-                    {/* Emoji avatar — click to change */}
                     <div className="avatar-emoji" onClick={()=>setShowEmojiPicker(true)}>
                       <span className="avatar-emoji-icon">{info.profileEmoji||'👤'}</span>
                       <div className="avatar-edit-hint">✏️</div>
@@ -904,11 +941,12 @@ service cloud.firestore {
                     userOrders.map(o=>(
                       <div key={o.id} className={`history-card ${stCls(o.status)}`}>
                         <div className="hc-head">
-                          <strong>Order #{o.id.slice(-6).toUpperCase()}</strong>
+                          <strong>Order #{String(o.id).slice(-6).toUpperCase()}</strong>
                           <span className={`badge-status ${stCls(o.status)}`}>{o.status}</span>
                         </div>
                         <p className="text-sm text-muted">{o.date}</p>
-                        <p className="mt-5"><b>পণ্য:</b> {o.items?.map(i=>`${i.name}(${i.qty})`).join(', ')}</p>
+                        {/* FIX: Profile orders map safety */}
+                        <p className="mt-5"><b>পণ্য:</b> {Array.isArray(o.items) && o.items.map(i=>`${i.name}(${i.qty})`).join(', ')}</p>
                         <p><b>মোট:</b> ৳{bn(o.total)}</p>
                       </div>
                     ))
