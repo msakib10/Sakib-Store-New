@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback, Component } from 'reac
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, getDocs, addDoc, doc, updateDoc,
-  getDoc, setDoc, query, where, deleteDoc
+  getDoc, setDoc, query, where, deleteDoc, onSnapshot
 } from "firebase/firestore";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
+  initializeAuth, browserLocalPersistence, browserPopupRedirectResolver,
+  GoogleAuthProvider, signInWithPopup,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInAnonymously, onAuthStateChanged, signOut, updateProfile
 } from "firebase/auth";
@@ -21,8 +22,8 @@ class ErrorBoundary extends Component {
       <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#f4fbf6',padding:30,textAlign:'center',fontFamily:'sans-serif'}}>
         <div style={{fontSize:60,marginBottom:16}}>⚠️</div>
         <h2 style={{color:'#1a7a43',marginBottom:12}}>কিছু একটা সমস্যা হয়েছে</h2>
-        <p style={{color:'#666',marginBottom:24,fontSize:13}}>{this.state.err?.message}</p>
-        <button onClick={()=>window.location.reload()} style={{background:'#27ae60',color:'#fff',border:'none',padding:'12px 28px',borderRadius:10,fontSize:15,fontWeight:700,cursor:'pointer'}}>পুনরায় চেষ্টা করুন</button>
+        <p style={{color:'#666',marginBottom:8,fontSize:13}}>{this.state.err?.message}</p>
+        <button onClick={()=>window.location.reload()} style={{background:'#27ae60',color:'#fff',border:'none',padding:'12px 28px',borderRadius:10,fontSize:15,fontWeight:700,cursor:'pointer',marginTop:16}}>পুনরায় চেষ্টা করুন</button>
       </div>
     );
     return this.props.children;
@@ -38,45 +39,56 @@ const FB = initializeApp({
   messagingSenderId:"514373347826",
   appId:"1:514373347826:web:a778be5386cd5362d1636b"
 });
-const db=getFirestore(FB), auth=getAuth(FB), gp=new GoogleAuthProvider();
+const db = getFirestore(FB);
+
+// FIX: Use initializeAuth with browserLocalPersistence to fix "missing initial state" error
+const auth = initializeAuth(FB, {
+  persistence: browserLocalPersistence,
+  popupRedirectResolver: browserPopupRedirectResolver,
+});
+const gp = new GoogleAuthProvider();
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
-
-// Beautiful default gradient covers
-const DEFAULT_COVERS=[
-  'linear-gradient(135deg,#1a7a43,#27ae60)',
-  'linear-gradient(135deg,#0f3460,#16213e)',
-  'linear-gradient(135deg,#e74c3c,#c0392b)',
-  'linear-gradient(135deg,#8e44ad,#6c3483)',
-  'linear-gradient(135deg,#e67e22,#d35400)',
-  'linear-gradient(135deg,#2980b9,#1a5276)',
-];
-
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverIsGradient:true,coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#e74c3c,#c0392b)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)'];
+const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
-  if(!u) return{baseQty:1,text:'টি',step:1};
-  try{
-    const s=String(u).replace(/[০-৯]/g,d=>'০১২৩৪৫৬৭৮৯'.indexOf(d));
-    const m=s.match(/^([\d.]+)\s*(.*)$/);
-    if(m){const n=parseFloat(m[1]),t=m[2]?.trim()||'টি';const step=(t.includes('গ্রাম')||t.includes('gm')||t.includes('মিলি')||t.includes('ml'))?(n>=100?50:10):1;return{baseQty:n,text:t,step};}
-  }catch(_){}
+  if(!u)return{baseQty:1,text:'টি',step:1};
+  try{const s=String(u).replace(/[০-৯]/g,d=>'০১২৩৪৫৬৭৮৯'.indexOf(d));const m=s.match(/^([\d.]+)\s*(.*)$/);if(m){const n=parseFloat(m[1]),t=m[2]?.trim()||'টি';const step=(t.includes('গ্রাম')||t.includes('gm')||t.includes('মিলি')||t.includes('ml'))?(n>=100?50:10):1;return{baseQty:n,text:t,step};}}catch(_){}
   return{baseQty:1,text:u,step:1};
 };
-const bn=n=>{try{if(n==null||n===''||isNaN(n)) return '০';return Number(n).toFixed(0).replace(/\d/g,d=>'০১২৩৪৫৬৭৮৯'[d]);}catch(_){return String(n);}};
+const bn=n=>{try{if(n==null||n===''||isNaN(n))return'০';return Number(n).toFixed(0).replace(/\d/g,d=>'০১২৩৪৫৬৭৮৯'[d]);}catch(_){return String(n);}};
 const getDC=loc=>{if(["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর"].includes(loc))return 20;if(loc==="সিংগাইর উপজেলার ভেতরে")return 40;return 50;};
 const stCls=s=>({Pending:'st-pending',Confirmed:'st-confirmed','On Delivery':'st-delivery',Delivered:'st-delivered',Cancelled:'st-cancelled'}[s]||'st-pending');
 
+// FIX: Safe date conversion — prevents React error #31 (Timestamp object rendered as child)
+const safeDate=d=>{
+  try{
+    if(!d)return'';
+    if(typeof d==='string')return d;
+    if(d?.toDate instanceof Function)return d.toDate().toLocaleString('bn-BD');
+    if(d?.seconds)return new Date(d.seconds*1000).toLocaleString('bn-BD');
+    if(d instanceof Date)return d.toLocaleString('bn-BD');
+    return String(d);
+  }catch(_){return'';}
+};
+
+// ─── Offline product cache ──────────────────────────────────────────────────────
+const CACHE_KEY='sakib_products_cache';
+const saveProductsCache=products=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(products));}catch(_){}};
+const loadProductsCache=()=>{try{const d=localStorage.getItem(CACHE_KEY);return d?JSON.parse(d):[];}catch(_){return[];}};
+
 // ─── Main App ──────────────────────────────────────────────────────────────────
 function AppInner(){
-  const [products,setProducts]=useState([]);
+  const [products,setProducts]=useState(loadProductsCache()); // FIX: load cache immediately
   const [headerImg,setHeaderImg]=useState('https://placehold.co/820x312/1a7a43/ffffff?text=Sakib+Store');
   const [notice,setNotice]=useState('সাকিব স্টোরে আপনাকে স্বাগতম! 🌿 সেরা মানের পণ্য, সাশ্রয়ী মূল্যে।');
-  const [notif,setNotif]=useState({text:'',expiresAt:0,show:false});
+  // FIX: Multiple notifications as array
+  const [notifications,setNotifications]=useState([]);
   const [coverPhotos,setCoverPhotos]=useState([]);
   const [showNotifModal,setShowNotifModal]=useState(false);
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
@@ -84,7 +96,6 @@ function AppInner(){
   const [showLogoutConfirm,setShowLogoutConfirm]=useState(false);
   const [appReady,setAppReady]=useState(false);
 
-  // Nav
   const [tab,setTab]=useState('home');
   const [tabHist,setTabHist]=useState(['home']);
   const [mode,setMode]=useState('customer');
@@ -93,50 +104,50 @@ function AppInner(){
   const [search,setSearch]=useState('');
   const [catSel,setCatSel]=useState('সব পণ্য');
 
-  // Auth
   const [user,setUser]=useState(null);
   const [cart,setCart]=useState([]);
   const [userOrders,setUserOrders]=useState([]);
   const [customLoc,setCustomLoc]=useState('');
   const [info,setInfo]=useState({...DEFINFO});
+  const [expandedOrder,setExpandedOrder]=useState(null); // for order detail expand
 
-  // Auth modal
-  const [authMode,setAuthMode]=useState('choice'); // 'choice'|'email-login'|'email-register'
+  const [authMode,setAuthMode]=useState('choice');
   const [emailInput,setEmailInput]=useState('');
   const [passInput,setPassInput]=useState('');
   const [nameInput,setNameInput]=useState('');
   const [authLoading,setAuthLoading]=useState(false);
 
-  // Admin
   const [adminPass,setAdminPass]=useState('');
   const [allOrders,setAllOrders]=useState([]);
   const [adminLoading,setAdminLoading]=useState(false);
   const [adminErr,setAdminErr]=useState('');
   const [adminFilter,setAdminFilter]=useState('All');
-  const [adminTab,setAdminTab]=useState('stock'); // FIX: default to stock tab
+  const [adminTab,setAdminTab]=useState('stock');
   const [editId,setEditId]=useState(null);
   const [newP,setNewP]=useState({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});
   const [newNotif,setNewNotif]=useState({text:'',durationMins:60});
   const [newCoverUrl,setNewCoverUrl]=useState('');
 
   const [toast,setToast]=useState(null);
-  const showToast=useCallback((msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3000);},[]);
+  const showToast=useCallback((msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3500);},[]);
   const backTime=useRef(0);
+  const orderUnsubRef=useRef(null);
 
   // ── Init ────────────────────────────────────────────────────────────────────
   useEffect(()=>{
     loadProducts();
     loadSettings();
 
-    // FIX: NO getRedirectResult — causes crash in WebView / partitioned storage
     const unsub=onAuthStateChanged(auth,cu=>{
       try{
         if(cu){
           setUser({id:cu.uid,isAnon:cu.isAnonymous,email:cu.email,name:cu.displayName});
           loadUserData(cu.uid);
+          subscribeToUserOrders(cu.uid); // FIX: real-time order updates
         }else{
           setUser(null);
-          try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...p,...JSON.parse(d)}));}catch(_){}
+          if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
+          try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
         }
       }catch(e){console.error('auth state:',e);}
       setAppReady(true);
@@ -155,16 +166,45 @@ function AppInner(){
       });
     };
     window.addEventListener('popstate',onPop);
-    return()=>{try{unsub();}catch(_){}window.removeEventListener('popstate',onPop);};
+    return()=>{try{unsub();}catch(_){}if(orderUnsubRef.current)orderUnsubRef.current();window.removeEventListener('popstate',onPop);};
   // eslint-disable-next-line
   },[]);
 
   const goto=t=>{setTab(t);setTabHist(p=>[...p,t]);window.scrollTo(0,0);};
 
+  // ── Real-time order subscription ────────────────────────────────────────────
+  const subscribeToUserOrders=uid=>{
+    if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
+    try{
+      const q=query(collection(db,'orders'),where('userId','==',uid));
+      orderUnsubRef.current=onSnapshot(q,snap=>{
+        // FIX: Safely convert Firestore Timestamp to string before storing
+        const orders=snap.docs.map(d=>{
+          const data=d.data();
+          return{
+            id:d.id,
+            ...data,
+            date:safeDate(data.date||data.timestamp), // convert timestamp safely
+          };
+        }).sort((a,b)=>(b.timestamp?.seconds||b.timestamp||0)-(a.timestamp?.seconds||a.timestamp||0));
+        setUserOrders(orders);
+      },err=>console.error('order snapshot:',err));
+    }catch(e){console.error('subscribeToUserOrders:',e);}
+  };
+
   // ── Data ────────────────────────────────────────────────────────────────────
   const loadProducts=async()=>{
-    try{const s=await getDocs(collection(db,'products'));setProducts(s.docs.map(d=>({id:d.id,...d.data()})));}
-    catch(e){console.error('loadProducts',e);}
+    try{
+      const s=await getDocs(collection(db,'products'));
+      const prods=s.docs.map(d=>({id:d.id,...d.data()}));
+      setProducts(prods);
+      saveProductsCache(prods); // FIX: save to cache for offline
+    }catch(e){
+      console.error('loadProducts',e);
+      // FIX: use cached products if offline
+      const cached=loadProductsCache();
+      if(cached.length>0){setProducts(cached);showToast('অফলাইন মোড: ক্যাশ থেকে পণ্য দেখানো হচ্ছে','warning');}
+    }
   };
 
   const loadSettings=async()=>{
@@ -174,8 +214,13 @@ function AppInner(){
         const d=s.data();
         if(d.header)setHeaderImg(d.header);
         if(d.notice)setNotice(d.notice);
-        if(d.notification)setNotif({...d.notification,show:Date.now()<=d.notification.expiresAt});
-        // FIX: load coverPhotos from Firestore
+        // FIX: Multiple notifications — store as array, filter expired
+        const now=Date.now();
+        if(Array.isArray(d.notifications)){
+          setNotifications(d.notifications.filter(n=>now<=n.expiresAt));
+        }else if(d.notification&&now<=d.notification.expiresAt){
+          setNotifications([d.notification]);
+        }
         if(Array.isArray(d.coverPhotos))setCoverPhotos(d.coverPhotos);
       }
     }catch(e){console.error('loadSettings',e);}
@@ -185,26 +230,24 @@ function AppInner(){
     try{
       const u=await getDoc(doc(db,'users',uid));
       if(u.exists()&&u.data().info)setInfo(p=>({...DEFINFO,...p,...u.data().info}));
-      const o=await getDocs(query(collection(db,'orders'),where('userId','==',uid)));
-      setUserOrders(o.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>b.timestamp-a.timestamp));
     }catch(e){console.error('loadUserData',e);}
   };
 
   // ── Auth ────────────────────────────────────────────────────────────────────
-  // FIX: Google popup only — no redirect, no sessionStorage issue
   const googleLogin=async()=>{
     setAuthLoading(true);
     try{
-      const r=await signInWithPopup(auth,gp);
+      // FIX: initializeAuth with browserLocalPersistence solves "missing initial state"
+      const r=await signInWithPopup(auth,gp,browserPopupRedirectResolver);
       if(r?.user){showToast('গুগল লগইন সফল! ✅');setAuthMode('choice');goto('home');}
     }catch(e){
       const code=e?.code||'';
       if(code==='auth/unauthorized-domain'){
-        showToast('Domain অনুমোদিত নয়! Firebase Console → Auth → Settings → Authorized Domains-এ আপনার site URL যোগ করুন।','error');
+        showToast('Firebase Console → Auth → Settings → Authorized Domains-এ msakib10.github.io যোগ করুন','error');
       }else if(code==='auth/popup-blocked'){
-        showToast('Popup block হয়েছে — browser-এ popup allow করুন।','error');
+        showToast('Popup block হয়েছে। Browser-এ popup allow করুন।','error');
       }else if(code==='auth/cancelled-popup-request'||code==='auth/popup-closed-by-user'){
-        // user closed — silent
+        // silent
       }else{
         showToast('লগইন সমস্যা: '+code,'error');
       }
@@ -212,7 +255,6 @@ function AppInner(){
     setAuthLoading(false);
   };
 
-  // FIX: Email login / register
   const emailLogin=async()=>{
     if(!emailInput||!passInput)return showToast('ইমেইল ও পাসওয়ার্ড দিন!','error');
     setAuthLoading(true);
@@ -220,8 +262,7 @@ function AppInner(){
       await signInWithEmailAndPassword(auth,emailInput,passInput);
       showToast('লগইন সফল! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');
     }catch(e){
-      if(e.code==='auth/user-not-found')showToast('এই ইমেইলে কোনো অ্যাকাউন্ট নেই।','error');
-      else if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')showToast('পাসওয়ার্ড ভুল।','error');
+      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential')showToast('ইমেইল বা পাসওয়ার্ড ভুল।','error');
       else showToast('সমস্যা: '+e.code,'error');
     }
     setAuthLoading(false);
@@ -229,12 +270,12 @@ function AppInner(){
 
   const emailRegister=async()=>{
     if(!emailInput||!passInput||!nameInput)return showToast('নাম, ইমেইল ও পাসওয়ার্ড দিন!','error');
-    if(passInput.length<6)return showToast('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।','error');
+    if(passInput.length<6)return showToast('পাসওয়ার্ড কমপক্ষে ৬ অক্ষর হতে হবে।','error');
     setAuthLoading(true);
     try{
       const r=await createUserWithEmailAndPassword(auth,emailInput,passInput);
       await updateProfile(r.user,{displayName:nameInput});
-      showToast('নতুন অ্যাকাউন্ট তৈরি হয়েছে! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
+      showToast('অ্যাকাউন্ট তৈরি হয়েছে! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
     }catch(e){
       if(e.code==='auth/email-already-in-use')showToast('এই ইমেইল আগে থেকে ব্যবহার হচ্ছে।','error');
       else showToast('সমস্যা: '+e.code,'error');
@@ -247,24 +288,22 @@ function AppInner(){
     catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
 
-  // FIX: Logout confirmation
   const confirmLogout=()=>setShowLogoutConfirm(true);
   const doLogout=async()=>{
     setShowLogoutConfirm(false);
+    if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
     try{await signOut(auth);}catch(_){}
     setInfo({...DEFINFO});setCart([]);setUserOrders([]);
     localStorage.removeItem('guestInfo');
     goto('home');
   };
 
-  // ── Profile ─────────────────────────────────────────────────────────────────
   const saveProfile=async(data=info)=>{
     try{
       if(user&&!user.isAnon){
         await setDoc(doc(db,'users',user.id),{info:data},{merge:true});
         showToast('প্রোফাইল আপডেট! ✅');
       }else{
-        // FIX: Guest data persists in localStorage until logout
         localStorage.setItem('guestInfo',JSON.stringify(data));
         showToast('তথ্য সাময়িকভাবে সেভ হয়েছে।');
       }
@@ -285,6 +324,7 @@ function AppInner(){
       return prev;
     });
   };
+
   const cartTotal=cart.reduce((a,i)=>a+(i.price/parseUnit(i.unit).baseQty)*i.qty,0);
   const dCharge=cart.length>0?getDC(info.locationType):0;
   const finalTotal=cartTotal+dCharge;
@@ -295,28 +335,48 @@ function AppInner(){
     if(info.locationType==='নিজে লেখুন'&&!customLoc)return showToast('জায়গার নাম লিখুন!','error');
     if((info.paymentMethod==='Bkash'||info.paymentMethod==='Nogod')&&(!info.senderNumber||!info.transactionId))return showToast('সেন্ডার নম্বর ও TrxID দিন!','error');
     try{
-      await addDoc(collection(db,'orders'),{items:cart,userInfo:{...info,finalLocation:loc},userId:user?.id||'Guest_'+Date.now(),paymentMethod:info.paymentMethod,total:finalTotal,status:'Pending',date:new Date().toLocaleString('bn-BD'),timestamp:Date.now()});
-      for(const item of cart){const{baseQty}=parseUnit(item.unit);await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}
+      // FIX: Store date as string, not Timestamp object
+      await addDoc(collection(db,'orders'),{
+        items:cart,userInfo:{...info,finalLocation:loc},
+        userId:user?.id||'Guest_'+Date.now(),
+        paymentMethod:info.paymentMethod,total:finalTotal,
+        status:'Pending',
+        date:new Date().toLocaleString('bn-BD'), // string, not Timestamp
+        timestamp:Date.now()
+      });
+      for(const item of cart){const{baseQty}=parseUnit(item.unit);try{await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}catch(_){}}
       if(user&&!user.isAnon)await setDoc(doc(db,'users',user.id),{info},{merge:true});
       showToast('অর্ডার সফল! 🎉');setCart([]);loadProducts();goto('profile');
-      if(user)loadUserData(user.id);
     }catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
 
+  // FIX: Cancel order
+  const cancelOrder=async(orderId)=>{
+    if(!window.confirm('অর্ডারটি বাতিল করতে চান?'))return;
+    try{
+      await updateDoc(doc(db,'orders',orderId),{status:'Cancelled'});
+      showToast('অর্ডার বাতিল করা হয়েছে।');
+    }catch(e){showToast('বাতিল করতে সমস্যা হয়েছে।','error');}
+  };
+
   // ── Admin ────────────────────────────────────────────────────────────────────
-  // FIX: Completely safe fetchOrders with granular error handling
   const fetchOrders=async()=>{
     setAdminLoading(true);setAdminErr('');
     try{
-      const controller=new AbortController();
-      const timeoutId=setTimeout(()=>controller.abort(),10000);
-      const snap=await getDocs(collection(db,'orders'));
-      clearTimeout(timeoutId);
-      setAllOrders(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)));
+      const snap=await Promise.race([
+        getDocs(collection(db,'orders')),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('TIMEOUT')),10000))
+      ]);
+      // FIX: Safely convert all dates before storing in state
+      const orders=snap.docs.map(d=>{
+        const data=d.data();
+        return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};
+      }).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+      setAllOrders(orders);
     }catch(e){
       const code=String(e?.code||e?.message||'');
-      if(code.includes('permission')||code.includes('PERMISSION'))setAdminErr('RULES');
-      else if(code.includes('abort')||code.includes('timeout'))setAdminErr('TIMEOUT');
+      if(code.includes('TIMEOUT'))setAdminErr('TIMEOUT');
+      else if(code.includes('permission'))setAdminErr('RULES');
       else setAdminErr('ERR:'+code);
     }finally{setAdminLoading(false);}
   };
@@ -324,17 +384,26 @@ function AppInner(){
   const saveProduct=async()=>{
     if(!newP.name||!newP.price)return showToast('নাম ও দাম দিন!','error');
     try{
-      if(editId){await updateDoc(doc(db,'products',editId),{...newP,price:Number(newP.price),stock:Number(newP.stock)});showToast('পণ্য আপডেট! ✅');}
-      else{await addDoc(collection(db,'products'),{...newP,price:Number(newP.price),stock:Number(newP.stock)});showToast('পণ্য যোগ! ✅');}
+      const data={...newP,price:Number(newP.price),stock:Number(newP.stock)};
+      if(editId){await updateDoc(doc(db,'products',editId),data);showToast('পণ্য আপডেট! ✅');}
+      else{await addDoc(collection(db,'products'),data);showToast('পণ্য যোগ! ✅');}
       setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});loadProducts();
     }catch(e){showToast(e?.message||'সমস্যা','error');}
   };
 
+  // FIX: Multiple notifications — add to array
   const sendNotif=async()=>{
     if(!newNotif.text)return;
-    const nd={text:newNotif.text,expiresAt:Date.now()+newNotif.durationMins*60000};
-    try{await setDoc(doc(db,'settings','general'),{notification:nd},{merge:true});setNotif({...nd,show:true});showToast('নোটিফিকেশন পাঠানো হয়েছে! ✅');setNewNotif({text:'',durationMins:60});}
-    catch(e){showToast('সমস্যা','error');}
+    const nd={id:Date.now(),text:newNotif.text,expiresAt:Date.now()+newNotif.durationMins*60000};
+    try{
+      const s=await getDoc(doc(db,'settings','general'));
+      const existing=s.exists()&&Array.isArray(s.data().notifications)?s.data().notifications:[];
+      const filtered=existing.filter(n=>Date.now()<=n.expiresAt);
+      const updated=[...filtered,nd];
+      await setDoc(doc(db,'settings','general'),{notifications:updated,notification:nd},{merge:true});
+      setNotifications(updated);
+      showToast('নোটিফিকেশন পাঠানো হয়েছে! ✅');setNewNotif({text:'',durationMins:60});
+    }catch(e){showToast('সমস্যা','error');}
   };
 
   const saveSettings=async()=>{
@@ -342,7 +411,6 @@ function AppInner(){
     catch(e){showToast('সমস্যা','error');}
   };
 
-  // FIX: Cover photos persist in Firestore
   const addCoverPhoto=async()=>{
     if(!newCoverUrl.trim())return;
     const updated=[...coverPhotos,newCoverUrl.trim()];
@@ -354,13 +422,13 @@ function AppInner(){
     const updated=coverPhotos.filter((_,i)=>i!==idx);
     setCoverPhotos(updated);
     try{await setDoc(doc(db,'settings','general'),{coverPhotos:updated},{merge:true});showToast('মুছে ফেলা হয়েছে।');}
-    catch(e){showToast('সমস্যা','error');}
+    catch(e){}
   };
 
   const filtered=products.filter(p=>{const c=homeCat==='সব পণ্য'||p.category===homeCat;const s=!search||p.name.toLowerCase().includes(search.toLowerCase());return c&&s;});
   const isHome=tab==='home';
+  const activeNotifs=notifications.filter(n=>Date.now()<=n.expiresAt);
 
-  // Product Card
   const PCard=({p})=>{
     const ci=cart.find(x=>x.id===p.id);
     const{baseQty}=parseUnit(p.unit);
@@ -375,12 +443,8 @@ function AppInner(){
         <p className="p-unit">{p.unit}</p>
         {!out&&<p className="p-stock">স্টক: {bn(p.stock)}</p>}
         <div className="p-action">
-          {out?(<button className="btn-add disabled" disabled>স্টক নেই</button>):ci?(
-            <div className="qty-controls">
-              <button className="btn-minus" onClick={()=>cartAction(p,'remove')}>-</button>
-              <span className="qty-text">{bn(ci.qty)}</span>
-              <button className="btn-plus" onClick={()=>cartAction(p,'add')}>+</button>
-            </div>
+          {out?(<button className="btn-add disabled" disabled>স্টক নেই</button>
+          ):ci?(<div className="qty-controls"><button className="btn-minus" onClick={()=>cartAction(p,'remove')}>-</button><span className="qty-text">{bn(ci.qty)}</span><button className="btn-plus" onClick={()=>cartAction(p,'add')}>+</button></div>
           ):(<button className="btn-add" onClick={()=>cartAction(p,'add')}>যোগ করুন</button>)}
         </div>
       </div>
@@ -411,7 +475,6 @@ function AppInner(){
   );
 
   // ══════ ADMIN PANEL ══════
-  // FIX: Stock & Settings LEFT, Orders RIGHT
   if(mode==='admin')return(
     <div className="admin-wrapper">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
@@ -420,16 +483,12 @@ function AppInner(){
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <span/>
       </header>
-
-      {/* FIX: Stock on LEFT (index 0), Orders on RIGHT (index 1) */}
       <div className="admin-tabs">
         <button className={adminTab==='stock'?'active':''} onClick={()=>setAdminTab('stock')}>📊 স্টক ও সেটিংস</button>
         <button className={adminTab==='orders'?'active':''} onClick={()=>{setAdminTab('orders');fetchOrders();}}>📦 অর্ডারসমূহ</button>
       </div>
-
       <div className="admin-content">
 
-        {/* ── STOCK & SETTINGS (default) ── */}
         {adminTab==='stock'&&(<>
           <div className="admin-grid-layout">
             <div className="admin-col">
@@ -442,15 +501,17 @@ function AppInner(){
                 <button className="btn-primary mt-10" onClick={saveSettings}>সেভ করুন</button>
               </div>
               <div className="admin-card">
-                <h4>🔔 পুশ নোটিফিকেশন</h4>
+                <h4>🔔 পুশ নোটিফিকেশন (একাধিক সম্ভব)</h4>
                 <input type="text" placeholder="নোটিফিকেশন মেসেজ..." value={newNotif.text} onChange={e=>setNewNotif({...newNotif,text:e.target.value})}/>
                 <input type="number" className="mt-10" placeholder="কত মিনিট স্থায়ী?" value={newNotif.durationMins} onChange={e=>setNewNotif({...newNotif,durationMins:+e.target.value})}/>
                 <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
+                {activeNotifs.length>0&&(<div style={{marginTop:10}}>
+                  <p style={{fontSize:12,color:'var(--muted)',marginBottom:6}}>সক্রিয় নোটিফিকেশন ({activeNotifs.length}টি):</p>
+                  {activeNotifs.map(n=><div key={n.id} style={{fontSize:12,padding:'6px 10px',background:'#fff8e1',borderRadius:8,marginBottom:4}}>🔔 {n.text}</div>)}
+                </div>)}
               </div>
-              {/* FIX: Cover Photos management */}
               <div className="admin-card">
-                <h4>🖼️ কভার ফটো ম্যানেজমেন্ট</h4>
-                <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>গ্রাহকরা এখান থেকে কভার বেছে নেবে। URL যোগ করুন।</p>
+                <h4>🖼️ কভার ফটো</h4>
                 <div style={{display:'flex',gap:8,marginBottom:10}}>
                   <input type="text" placeholder="ছবির URL..." value={newCoverUrl} onChange={e=>setNewCoverUrl(e.target.value)}
                     style={{flex:1,padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,background:'var(--green-pale)',outline:'none'}}
@@ -468,7 +529,6 @@ function AppInner(){
                 </div>
               </div>
             </div>
-
             <div className="admin-col">
               <div className="admin-card">
                 <h3 className="text-green">{editId?"✏️ এডিট পণ্য":"➕ নতুন পণ্য"}</h3>
@@ -490,8 +550,7 @@ function AppInner(){
               </div>
             </div>
           </div>
-
-          <h3 className="section-title mt-20">স্টক লিস্ট</h3>
+          <h3 className="section-title mt-20">স্টক লিস্ট ({products.length}টি পণ্য)</h3>
           <div className="stock-list-grid">
             {products.map(p=>(
               <div key={p.id} className="stock-item-row">
@@ -504,7 +563,6 @@ function AppInner(){
           </div>
         </>)}
 
-        {/* ── ORDERS (right tab) ── */}
         {adminTab==='orders'&&(<>
           <div className="admin-orders-header">
             <h3 className="section-title">অর্ডার ম্যানেজমেন্ট</h3>
@@ -519,22 +577,11 @@ function AppInner(){
             <div className="admin-loading-box"><div className="admin-spinner"/><p>লোড হচ্ছে...</p></div>
           ):adminErr?(
             <div className="admin-error-box">
-              {adminErr==='RULES'?(<>
-                <div style={{fontSize:36,marginBottom:10}}>🔒</div>
-                <p style={{fontWeight:700,marginBottom:8}}>Firestore Security Rules সমস্যা</p>
-                <div className="rules-code">{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`}</div>
-                <button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button>
-              </>):adminErr==='TIMEOUT'?(<>
-                <div style={{fontSize:36,marginBottom:10}}>⏱️</div>
-                <p style={{fontWeight:700}}>সংযোগ ধীর বা নেই</p>
-                <button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button>
-              </>):(<>
-                <div style={{fontSize:36,marginBottom:10}}>⚠️</div>
-                <p style={{fontSize:12}}>{adminErr}</p>
-                <button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button>
-              </>)}
+              {adminErr==='RULES'?(<><div style={{fontSize:36,marginBottom:10}}>🔒</div><p style={{fontWeight:700,marginBottom:8}}>Firestore Rules সমস্যা</p><div className="rules-code">{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`}</div><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
+              ):adminErr==='TIMEOUT'?(<><div style={{fontSize:36,marginBottom:10}}>⏱️</div><p style={{fontWeight:700}}>সংযোগ সমস্যা</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
+              ):(<><div style={{fontSize:36,marginBottom:10}}>⚠️</div><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>)}
             </div>
-          ):allOrders.length===0&&!adminLoading?(
+          ):allOrders.length===0?(
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)'}}>
               <p style={{marginBottom:16}}>কোনো অর্ডার নেই।</p>
               <button className="btn-primary" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>লোড করুন</button>
@@ -583,7 +630,7 @@ function AppInner(){
         <div className="modal-bg" onClick={()=>setShowLogoutConfirm(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
             <h3 className="text-green mb-10">🚪 লগ আউট করবেন?</h3>
-            <p style={{lineHeight:1.6,marginBottom:16}}>লগ আউট করলে আপনার সকল তথ্য ও অর্ডারের ডেটা {user?.isAnon?'মুছে যাবে (গেস্ট অ্যাকাউন্ট সংরক্ষণ হয় না)।':'লগইন করলে আবার দেখতে পাবেন।'}</p>
+            <p style={{lineHeight:1.6,marginBottom:16}}>{user?.isAnon?'লগ আউট করলে গেস্ট ডেটা মুছে যাবে।':'লগইন করলে আবার সব দেখতে পাবেন।'}</p>
             <div style={{display:'flex',gap:10}}>
               <button className="btn-danger flex-1" onClick={doLogout}>হ্যাঁ, লগ আউট</button>
               <button className="btn-outline flex-1" onClick={()=>setShowLogoutConfirm(false)}>বাতিল</button>
@@ -600,9 +647,7 @@ function AppInner(){
             <div className="emoji-grid">
               {EMOJIS.map(em=>(
                 <button key={em} className={`emoji-btn ${info.profileEmoji===em?'active':''}`}
-                  onClick={()=>{const upd={...info,profileEmoji:em};setInfo(upd);saveProfile(upd);setShowEmojiPicker(false);}}>
-                  {em}
-                </button>
+                  onClick={()=>{const upd={...info,profileEmoji:em};setInfo(upd);saveProfile(upd);setShowEmojiPicker(false);}}>{em}</button>
               ))}
             </div>
           </div>
@@ -614,7 +659,7 @@ function AppInner(){
         <div className="modal-bg" onClick={()=>setShowCoverPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
             <h3 className="text-green mb-10">কভার বেছে নিন</h3>
-            <p style={{fontSize:12,color:'var(--muted)',marginBottom:12}}>ডিফল্ট ডিজাইন:</p>
+            <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>ডিফল্ট ডিজাইন:</p>
             <div className="cover-picker-grid">
               {DEFAULT_COVERS.map((g,i)=>(
                 <div key={i} className={`cover-pick-item ${!info.coverPhoto&&info.coverGradient===g?'active':''}`}
@@ -641,13 +686,24 @@ function AppInner(){
         </div>
       )}
 
-      {/* Notification Modal */}
+      {/* FIX: Multiple notifications modal */}
       {showNotifModal&&(
         <div className="modal-bg" onClick={()=>setShowNotifModal(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-green mb-10">🔔 নোটিফিকেশন</h3>
-            {notif.show&&notif.text?<p style={{lineHeight:1.6}}>{notif.text}</p>:<p className="text-muted">এই মুহূর্তে কোনো নোটিফিকেশন নেই।</p>}
-            <button className="btn-primary mt-20" onClick={()=>setShowNotifModal(false)}>ঠিক আছে</button>
+            <h3 className="text-green mb-15">🔔 নোটিফিকেশন</h3>
+            {activeNotifs.length===0?(
+              <p className="text-muted">এই মুহূর্তে কোনো নোটিফিকেশন নেই।</p>
+            ):(
+              activeNotifs.map((n,i)=>(
+                <div key={n.id||i} style={{background:'var(--green-pale)',borderRadius:10,padding:'12px 14px',marginBottom:10,borderLeft:'4px solid var(--green)'}}>
+                  <p style={{lineHeight:1.6,fontSize:14}}>{n.text}</p>
+                  <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
+                    মেয়াদ: {new Date(n.expiresAt).toLocaleString('bn-BD')}
+                  </p>
+                </div>
+              ))
+            )}
+            <button className="btn-primary mt-15" onClick={()=>setShowNotifModal(false)}>ঠিক আছে</button>
           </div>
         </div>
       )}
@@ -665,16 +721,15 @@ function AppInner(){
         </ul>
       </div>
 
-      {/* FIX: Header — home-এ শুধু ☰ এবং 🔔, "সাকিব স্টোর" লেখা নেই */}
+      {/* Header */}
       {isHome?(
         <header className="main-header">
           <img src={headerImg} alt="header" className="header-bg-img" onError={e=>{e.target.style.display='none';}}/>
           <div className="header-overlay">
             <button className="icon-btn" onClick={()=>setDrawer(true)}>☰</button>
-            {/* FIX: No "সাকিব স্টোর" text on home header */}
             <div/>
             <button className="icon-btn notif-btn" onClick={()=>setShowNotifModal(true)}>
-              🔔{notif.show&&<span className="notif-dot"/>}
+              🔔{activeNotifs.length>0&&<span className="notif-dot"/>}
             </button>
           </div>
         </header>
@@ -683,7 +738,7 @@ function AppInner(){
           <button className="icon-btn-dark" onClick={()=>setDrawer(true)}>☰</button>
           <div className="mini-header-title">সাকিব স্টোর</div>
           <button className="icon-btn-dark notif-btn" onClick={()=>setShowNotifModal(true)}>
-            🔔{notif.show&&<span className="notif-dot-dark"/>}
+            🔔{activeNotifs.length>0&&<span className="notif-dot-dark"/>}
           </button>
         </header>
       )}
@@ -704,7 +759,9 @@ function AppInner(){
               {CATS.map(c=><button key={c} className={`cat-pill ${homeCat===c?'active':''}`} onClick={()=>{setHomeCat(c);setSearch('');}}>{c}</button>)}
             </div>
             {filtered.length===0?(
-              <div className="empty-state text-center mt-30"><div className="empty-icon">🔍</div><p>{search?`"${search}" পাওয়া যায়নি`:'এই ক্যাটাগরিতে পণ্য নেই'}</p>
+              <div className="empty-state text-center mt-30">
+                <div className="empty-icon">🔍</div>
+                <p>{search?`"${search}" পাওয়া যায়নি`:'এই ক্যাটাগরিতে পণ্য নেই'}</p>
                 <button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={()=>{setHomeCat('সব পণ্য');setSearch('');}}>সব পণ্য দেখুন</button>
               </div>
             ):(
@@ -795,35 +852,27 @@ function AppInner(){
               <div className="auth-screen text-center">
                 <div className="auth-logo">🛒</div>
                 <h2 className="mb-10">লগইন করুন</h2>
-
                 {authMode==='choice'&&(<>
                   <p className="text-muted mb-20">অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন।</p>
                   <button className="btn-google mb-10" onClick={googleLogin} disabled={authLoading}>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="20"/>
                     {authLoading?'লোড হচ্ছে...':'Google দিয়ে লগইন'}
                   </button>
-                  <button className="btn-email mb-10" onClick={()=>setAuthMode('email-login')}>
-                    📧 ইমেইল দিয়ে লগইন
-                  </button>
-                  <button className="btn-email-reg mb-10" onClick={()=>setAuthMode('email-register')}>
-                    ✏️ নতুন অ্যাকাউন্ট তৈরি করুন
-                  </button>
+                  <button className="btn-email mb-10" onClick={()=>setAuthMode('email-login')}>📧 ইমেইল দিয়ে লগইন</button>
+                  <button className="btn-email-reg mb-10" onClick={()=>setAuthMode('email-register')}>✏️ নতুন অ্যাকাউন্ট তৈরি করুন</button>
                   <div className="divider">অথবা</div>
                   <button className="btn-outline mt-10" onClick={guestLogin}>👤 গেস্ট হিসেবে প্রবেশ করুন</button>
                   <p className="text-muted mt-15 text-sm">Google/Email লগইন করলে ডেটা চিরস্থায়ী থাকে।</p>
                 </>)}
-
                 {authMode==='email-login'&&(
                   <div style={{width:'100%',maxWidth:300}}>
                     <p className="text-muted mb-15">ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন</p>
                     <input type="email" placeholder="ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
-                    <input type="password" placeholder="পাসওয়ার্ড" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15"
-                      onKeyDown={e=>{if(e.key==='Enter')emailLogin();}}/>
+                    <input type="password" placeholder="পাসওয়ার্ড" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15" onKeyDown={e=>{if(e.key==='Enter')emailLogin();}}/>
                     <button className="btn-primary mb-10" onClick={emailLogin} disabled={authLoading}>{authLoading?'লোড...':'লগইন করুন'}</button>
                     <button className="btn-outline" onClick={()=>{setAuthMode('choice');setEmailInput('');setPassInput('');}}>← ফিরে যান</button>
                   </div>
                 )}
-
                 {authMode==='email-register'&&(
                   <div style={{width:'100%',maxWidth:300}}>
                     <p className="text-muted mb-15">নতুন অ্যাকাউন্ট তৈরি করুন</p>
@@ -865,20 +914,53 @@ function AppInner(){
                     <button className="btn-primary mt-10" onClick={()=>saveProfile()}>💾 তথ্য সেভ করুন</button>
                   </div>
                 </div>
+
+                {/* FIX: Expandable order history with cancel option */}
                 <div className="order-history mt-20">
                   <h3 className="sub-title">📦 আপনার অর্ডার ({userOrders.length})</h3>
                   {userOrders.length===0?<p className="text-muted">কোনো অর্ডার নেই।</p>:(
                     userOrders.map(o=>(
                       <div key={o.id} className={`history-card ${stCls(o.status)}`}>
-                        <div className="hc-head"><strong>Order #{String(o.id).slice(-6).toUpperCase()}</strong><span className={`badge-status ${stCls(o.status)}`}>{o.status}</span></div>
-                        <p className="text-sm text-muted">{o.date}</p>
-                        <p className="mt-5"><b>পণ্য:</b> {Array.isArray(o.items)&&o.items.map(i=>`${i.name}(${i.qty})`).join(', ')}</p>
-                        <p><b>মোট:</b> ৳{bn(o.total)}</p>
+                        {/* Clickable header to expand */}
+                        <div className="hc-head" onClick={()=>setExpandedOrder(expandedOrder===o.id?null:o.id)} style={{cursor:'pointer'}}>
+                          <div>
+                            <strong>Order #{String(o.id).slice(-6).toUpperCase()}</strong>
+                            <p className="text-sm text-muted">{o.date}</p>
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:8}}>
+                            <span className={`badge-status ${stCls(o.status)}`}>{o.status}</span>
+                            <span style={{fontSize:12,color:'var(--muted)'}}>{expandedOrder===o.id?'▲':'▼'}</span>
+                          </div>
+                        </div>
+                        {/* Expanded details */}
+                        {expandedOrder===o.id&&(
+                          <div className="order-detail">
+                            <div style={{marginTop:10,marginBottom:8}}>
+                              <p style={{fontWeight:700,fontSize:13,marginBottom:6}}>পণ্যসমূহ:</p>
+                              {Array.isArray(o.items)&&o.items.map((item,i)=>(
+                                <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'4px 0',borderBottom:'1px dashed var(--border)'}}>
+                                  <span>{item.name} × {item.qty}{parseUnit(item.unit).text}</span>
+                                  <span style={{fontWeight:600}}>৳{bn((item.price/parseUnit(item.unit).baseQty)*item.qty)}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div style={{display:'flex',justifyContent:'space-between',fontWeight:700,fontSize:14,marginBottom:4}}>
+                              <span>মোট বিল:</span><span style={{color:'var(--green)'}}>৳{bn(o.total)}</span>
+                            </div>
+                            <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>পেমেন্ট: {o.paymentMethod}</p>
+                            {/* Cancel button only for Pending orders */}
+                            {o.status==='Pending'&&(
+                              <button onClick={()=>cancelOrder(o.id)}
+                                style={{width:'100%',padding:'8px',background:'#fff',border:'1.5px solid var(--red)',borderRadius:8,color:'var(--red)',fontFamily:'var(--font)',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                                ❌ অর্ডার বাতিল করুন
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
-                {/* FIX: Logout confirmation */}
                 <button className="btn-danger w-full mt-20" onClick={confirmLogout}>🚪 লগ আউট করুন</button>
               </div>
             )}
