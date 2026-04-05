@@ -5,10 +5,9 @@ import {
   getDoc, setDoc, query, where, deleteDoc, onSnapshot
 } from "firebase/firestore";
 import {
-  initializeAuth, browserLocalPersistence, browserPopupRedirectResolver,
-  GoogleAuthProvider, signInWithPopup,
+  getAuth, GoogleAuthProvider, signInWithPopup,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signInAnonymously, onAuthStateChanged, signOut, updateProfile
+  signInAnonymously, onAuthStateChanged, signOut, updateProfile, sendEmailVerification
 } from "firebase/auth";
 import './App.css';
 
@@ -32,28 +31,25 @@ class ErrorBoundary extends Component {
 
 // ─── Firebase ──────────────────────────────────────────────────────────────────
 const FB = initializeApp({
-  apiKey:"AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
-  authDomain:"sakib-store1.firebaseapp.com",
-  projectId:"sakib-store1",
-  storageBucket:"sakib-store1.firebasestorage.app",
-  messagingSenderId:"514373347826",
-  appId:"1:514373347826:web:a778be5386cd5362d1636b"
+  apiKey: "AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
+  authDomain: "sakib-store1.firebaseapp.com",
+  projectId: "sakib-store1",
+  storageBucket: "sakib-store1.firebasestorage.app",
+  messagingSenderId: "514373347826",
+  appId: "1:514373347826:web:a778be5386cd5362d1636b"
 });
 const db = getFirestore(FB);
 
-// FIX: Use initializeAuth with browserLocalPersistence to fix "missing initial state" error
-const auth = initializeAuth(FB, {
-  persistence: browserLocalPersistence,
-  popupRedirectResolver: browserPopupRedirectResolver,
-});
+// FIX: Standard auth initialization to prevent white screen issues
+const auth = getAuth(FB);
 const gp = new GoogleAuthProvider();
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
-const CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
-const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
-const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
-const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#e74c3c,#c0392b)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)'];
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const CATS = ['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
+const DLOCS = ["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
+const EMOJIS = ['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
+const DEFAULT_COVERS = ['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#e74c3c,#c0392b)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)'];
+const DEFINFO = {name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -65,7 +61,6 @@ const bn=n=>{try{if(n==null||n===''||isNaN(n))return'০';return Number(n).toFix
 const getDC=loc=>{if(["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর"].includes(loc))return 20;if(loc==="সিংগাইর উপজেলার ভেতরে")return 40;return 50;};
 const stCls=s=>({Pending:'st-pending',Confirmed:'st-confirmed','On Delivery':'st-delivery',Delivered:'st-delivered',Cancelled:'st-cancelled'}[s]||'st-pending');
 
-// FIX: Safe date conversion — prevents React error #31 (Timestamp object rendered as child)
 const safeDate=d=>{
   try{
     if(!d)return'';
@@ -77,24 +72,21 @@ const safeDate=d=>{
   }catch(_){return'';}
 };
 
-// ─── Offline product cache ──────────────────────────────────────────────────────
 const CACHE_KEY='sakib_products_cache';
 const saveProductsCache=products=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(products));}catch(_){}};
 const loadProductsCache=()=>{try{const d=localStorage.getItem(CACHE_KEY);return d?JSON.parse(d):[];}catch(_){return[];}};
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 function AppInner(){
-  const [products,setProducts]=useState(loadProductsCache()); // FIX: load cache immediately
+  const [products,setProducts]=useState(loadProductsCache()); 
   const [headerImg,setHeaderImg]=useState('https://placehold.co/820x312/1a7a43/ffffff?text=Sakib+Store');
   const [notice,setNotice]=useState('সাকিব স্টোরে আপনাকে স্বাগতম! 🌿 সেরা মানের পণ্য, সাশ্রয়ী মূল্যে।');
-  // FIX: Multiple notifications as array
   const [notifications,setNotifications]=useState([]);
   const [coverPhotos,setCoverPhotos]=useState([]);
   const [showNotifModal,setShowNotifModal]=useState(false);
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const [showCoverPicker,setShowCoverPicker]=useState(false);
   const [showLogoutConfirm,setShowLogoutConfirm]=useState(false);
-  const [appReady,setAppReady]=useState(false);
 
   const [tab,setTab]=useState('home');
   const [tabHist,setTabHist]=useState(['home']);
@@ -109,7 +101,7 @@ function AppInner(){
   const [userOrders,setUserOrders]=useState([]);
   const [customLoc,setCustomLoc]=useState('');
   const [info,setInfo]=useState({...DEFINFO});
-  const [expandedOrder,setExpandedOrder]=useState(null); // for order detail expand
+  const [expandedOrder,setExpandedOrder]=useState(null);
 
   const [authMode,setAuthMode]=useState('choice');
   const [emailInput,setEmailInput]=useState('');
@@ -133,7 +125,6 @@ function AppInner(){
   const backTime=useRef(0);
   const orderUnsubRef=useRef(null);
 
-  // ── Init ────────────────────────────────────────────────────────────────────
   useEffect(()=>{
     loadProducts();
     loadSettings();
@@ -143,15 +134,14 @@ function AppInner(){
         if(cu){
           setUser({id:cu.uid,isAnon:cu.isAnonymous,email:cu.email,name:cu.displayName});
           loadUserData(cu.uid);
-          subscribeToUserOrders(cu.uid); // FIX: real-time order updates
+          subscribeToUserOrders(cu.uid); 
         }else{
           setUser(null);
           if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
           try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
         }
       }catch(e){console.error('auth state:',e);}
-      setAppReady(true);
-    },err=>{console.error('auth err:',err);setAppReady(true);});
+    },err=>{console.error('auth err:',err);});
 
     window.history.pushState(null,null,window.location.pathname);
     const onPop=()=>{
@@ -172,36 +162,27 @@ function AppInner(){
 
   const goto=t=>{setTab(t);setTabHist(p=>[...p,t]);window.scrollTo(0,0);};
 
-  // ── Real-time order subscription ────────────────────────────────────────────
   const subscribeToUserOrders=uid=>{
     if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
     try{
       const q=query(collection(db,'orders'),where('userId','==',uid));
       orderUnsubRef.current=onSnapshot(q,snap=>{
-        // FIX: Safely convert Firestore Timestamp to string before storing
         const orders=snap.docs.map(d=>{
           const data=d.data();
-          return{
-            id:d.id,
-            ...data,
-            date:safeDate(data.date||data.timestamp), // convert timestamp safely
-          };
+          return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};
         }).sort((a,b)=>(b.timestamp?.seconds||b.timestamp||0)-(a.timestamp?.seconds||a.timestamp||0));
         setUserOrders(orders);
       },err=>console.error('order snapshot:',err));
     }catch(e){console.error('subscribeToUserOrders:',e);}
   };
 
-  // ── Data ────────────────────────────────────────────────────────────────────
   const loadProducts=async()=>{
     try{
       const s=await getDocs(collection(db,'products'));
       const prods=s.docs.map(d=>({id:d.id,...d.data()}));
       setProducts(prods);
-      saveProductsCache(prods); // FIX: save to cache for offline
+      saveProductsCache(prods); 
     }catch(e){
-      console.error('loadProducts',e);
-      // FIX: use cached products if offline
       const cached=loadProductsCache();
       if(cached.length>0){setProducts(cached);showToast('অফলাইন মোড: ক্যাশ থেকে পণ্য দেখানো হচ্ছে','warning');}
     }
@@ -214,7 +195,6 @@ function AppInner(){
         const d=s.data();
         if(d.header)setHeaderImg(d.header);
         if(d.notice)setNotice(d.notice);
-        // FIX: Multiple notifications — store as array, filter expired
         const now=Date.now();
         if(Array.isArray(d.notifications)){
           setNotifications(d.notifications.filter(n=>now<=n.expiresAt));
@@ -233,24 +213,14 @@ function AppInner(){
     }catch(e){console.error('loadUserData',e);}
   };
 
-  // ── Auth ────────────────────────────────────────────────────────────────────
   const googleLogin=async()=>{
     setAuthLoading(true);
     try{
-      // FIX: initializeAuth with browserLocalPersistence solves "missing initial state"
-      const r=await signInWithPopup(auth,gp,browserPopupRedirectResolver);
+      const r=await signInWithPopup(auth,gp);
       if(r?.user){showToast('গুগল লগইন সফল! ✅');setAuthMode('choice');goto('home');}
     }catch(e){
       const code=e?.code||'';
-      if(code==='auth/unauthorized-domain'){
-        showToast('Firebase Console → Auth → Settings → Authorized Domains-এ msakib10.github.io যোগ করুন','error');
-      }else if(code==='auth/popup-blocked'){
-        showToast('Popup block হয়েছে। Browser-এ popup allow করুন।','error');
-      }else if(code==='auth/cancelled-popup-request'||code==='auth/popup-closed-by-user'){
-        // silent
-      }else{
-        showToast('লগইন সমস্যা: '+code,'error');
-      }
+      showToast('লগইন সমস্যা: '+code,'error');
     }
     setAuthLoading(false);
   };
@@ -259,7 +229,14 @@ function AppInner(){
     if(!emailInput||!passInput)return showToast('ইমেইল ও পাসওয়ার্ড দিন!','error');
     setAuthLoading(true);
     try{
-      await signInWithEmailAndPassword(auth,emailInput,passInput);
+      const r=await signInWithEmailAndPassword(auth,emailInput,passInput);
+      // FIX: Check if email is verified
+      if(!r.user.emailVerified){
+        showToast('আপনার ইমেইলটি এখনো ভেরিফাই করা হয়নি! দয়া করে ইনবক্স চেক করুন।','error');
+        await signOut(auth); // Force logout
+        setAuthLoading(false);
+        return;
+      }
       showToast('লগইন সফল! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');
     }catch(e){
       if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential')showToast('ইমেইল বা পাসওয়ার্ড ভুল।','error');
@@ -275,7 +252,11 @@ function AppInner(){
     try{
       const r=await createUserWithEmailAndPassword(auth,emailInput,passInput);
       await updateProfile(r.user,{displayName:nameInput});
-      showToast('অ্যাকাউন্ট তৈরি হয়েছে! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
+      // FIX: Send verification email
+      await sendEmailVerification(r.user);
+      showToast('অ্যাকাউন্ট তৈরি হয়েছে! দয়া করে আপনার ইমেইলের ইনবক্স চেক করে ভেরিফাই করুন। ✅');
+      await signOut(auth); // Force user to login after verification
+      setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
     }catch(e){
       if(e.code==='auth/email-already-in-use')showToast('এই ইমেইল আগে থেকে ব্যবহার হচ্ছে।','error');
       else showToast('সমস্যা: '+e.code,'error');
@@ -310,7 +291,6 @@ function AppInner(){
     }catch(e){showToast('সেভ সমস্যা','error');}
   };
 
-  // ── Cart ────────────────────────────────────────────────────────────────────
   const cartAction=(product,action)=>{
     if(action==='add'&&product.stock<=0){showToast('এই পণ্যের স্টক শেষ!','error');return;}
     const{baseQty,step}=parseUnit(product.unit);
@@ -335,13 +315,12 @@ function AppInner(){
     if(info.locationType==='নিজে লেখুন'&&!customLoc)return showToast('জায়গার নাম লিখুন!','error');
     if((info.paymentMethod==='Bkash'||info.paymentMethod==='Nogod')&&(!info.senderNumber||!info.transactionId))return showToast('সেন্ডার নম্বর ও TrxID দিন!','error');
     try{
-      // FIX: Store date as string, not Timestamp object
       await addDoc(collection(db,'orders'),{
         items:cart,userInfo:{...info,finalLocation:loc},
         userId:user?.id||'Guest_'+Date.now(),
         paymentMethod:info.paymentMethod,total:finalTotal,
         status:'Pending',
-        date:new Date().toLocaleString('bn-BD'), // string, not Timestamp
+        date:new Date().toLocaleString('bn-BD'),
         timestamp:Date.now()
       });
       for(const item of cart){const{baseQty}=parseUnit(item.unit);try{await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}catch(_){}}
@@ -350,16 +329,14 @@ function AppInner(){
     }catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
 
-  // FIX: Cancel order
   const cancelOrder=async(orderId)=>{
     if(!window.confirm('অর্ডারটি বাতিল করতে চান?'))return;
     try{
       await updateDoc(doc(db,'orders',orderId),{status:'Cancelled'});
-      showToast('অর্ডার বাতিল করা হয়েছে।');
+      showToast('অর্ডার সফলভাবে বাতিল করা হয়েছে।');
     }catch(e){showToast('বাতিল করতে সমস্যা হয়েছে।','error');}
   };
 
-  // ── Admin ────────────────────────────────────────────────────────────────────
   const fetchOrders=async()=>{
     setAdminLoading(true);setAdminErr('');
     try{
@@ -367,7 +344,6 @@ function AppInner(){
         getDocs(collection(db,'orders')),
         new Promise((_,r)=>setTimeout(()=>r(new Error('TIMEOUT')),10000))
       ]);
-      // FIX: Safely convert all dates before storing in state
       const orders=snap.docs.map(d=>{
         const data=d.data();
         return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};
@@ -391,7 +367,6 @@ function AppInner(){
     }catch(e){showToast(e?.message||'সমস্যা','error');}
   };
 
-  // FIX: Multiple notifications — add to array
   const sendNotif=async()=>{
     if(!newNotif.text)return;
     const nd={id:Date.now(),text:newNotif.text,expiresAt:Date.now()+newNotif.durationMins*60000};
@@ -451,15 +426,6 @@ function AppInner(){
     );
   };
 
-  if(!appReady)return(
-    <div className="splash-screen">
-      <div className="splash-logo">🌿</div>
-      <h2>সাকিব স্টোর</h2>
-      <div className="splash-spinner"/>
-    </div>
-  );
-
-  // ══════ ADMIN LOGIN ══════
   if(mode==='adminLogin')return(
     <div className="fullscreen-center">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
@@ -474,7 +440,6 @@ function AppInner(){
     </div>
   );
 
-  // ══════ ADMIN PANEL ══════
   if(mode==='admin')return(
     <div className="admin-wrapper">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
@@ -501,7 +466,7 @@ function AppInner(){
                 <button className="btn-primary mt-10" onClick={saveSettings}>সেভ করুন</button>
               </div>
               <div className="admin-card">
-                <h4>🔔 পুশ নোটিফিকেশন (একাধিক সম্ভব)</h4>
+                <h4>🔔 পুশ নোটিফিকেশন</h4>
                 <input type="text" placeholder="নোটিফিকেশন মেসেজ..." value={newNotif.text} onChange={e=>setNewNotif({...newNotif,text:e.target.value})}/>
                 <input type="number" className="mt-10" placeholder="কত মিনিট স্থায়ী?" value={newNotif.durationMins} onChange={e=>setNewNotif({...newNotif,durationMins:+e.target.value})}/>
                 <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
@@ -577,9 +542,7 @@ function AppInner(){
             <div className="admin-loading-box"><div className="admin-spinner"/><p>লোড হচ্ছে...</p></div>
           ):adminErr?(
             <div className="admin-error-box">
-              {adminErr==='RULES'?(<><div style={{fontSize:36,marginBottom:10}}>🔒</div><p style={{fontWeight:700,marginBottom:8}}>Firestore Rules সমস্যা</p><div className="rules-code">{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`}</div><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
-              ):adminErr==='TIMEOUT'?(<><div style={{fontSize:36,marginBottom:10}}>⏱️</div><p style={{fontWeight:700}}>সংযোগ সমস্যা</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
-              ):(<><div style={{fontSize:36,marginBottom:10}}>⚠️</div><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>)}
+              <div style={{fontSize:36,marginBottom:10}}>⚠️</div><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button>
             </div>
           ):allOrders.length===0?(
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)'}}>
@@ -589,16 +552,25 @@ function AppInner(){
           ):(
             <div className="orders-list">
               {allOrders.filter(o=>adminFilter==='All'||o.status===adminFilter).map(order=>(
-                <div key={order.id} className={`admin-order-card ${stCls(order.status)}`}>
-                  <div className="o-header"><strong>#{String(order.id).slice(-6).toUpperCase()}</strong><span className="o-date">{order.date}</span></div>
+                <div key={order.id} className="admin-order-card">
+                  <div className="o-header">
+                    <strong><span style={{color: '#1a7a43'}}>#</span>{String(order.id).slice(-6).toUpperCase()}</strong>
+                    <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                      <span className={`badge-status ${stCls(order.status)}`}>{order.status}</span>
+                      <span className="o-date text-muted" style={{fontSize: '12px'}}>{order.date}</span>
+                    </div>
+                  </div>
                   <p><b>নাম:</b> {order.userInfo?.name} | <b>মোবাইল:</b> {order.userInfo?.phone}</p>
                   <p><b>ঠিকানা:</b> {order.userInfo?.finalLocation}, {order.userInfo?.address}, {order.userInfo?.area}, {order.userInfo?.district}</p>
                   <p className="o-items-text"><b>পণ্য:</b> {Array.isArray(order.items)&&order.items.map(i=>`${i.name}(${i.qty}${parseUnit(i.unit).text})`).join(', ')}</p>
-                  <p><b>পেমেন্ট:</b> <span className="highlight-text">{order.paymentMethod}</span> | <b>মোট:</b> ৳{order.total}</p>
+                  <p><b>পেমেন্ট:</b> <span className="highlight-text">{order.paymentMethod}</span> | <b>মোট:</b> ৳{bn(order.total)}</p>
                   {(order.paymentMethod==='Bkash'||order.paymentMethod==='Nogod')&&<p className="trx-box">TrxID: {order.userInfo?.transactionId} | Sender: {order.userInfo?.senderNumber}</p>}
+                  
                   <div className="status-updater">
-                    <label>স্টেটাস:</label>
+                    <label>স্টেটাস পরিবর্তন:</label>
+                    {/* FIX: If customer cancelled, admin cannot change it anymore */}
                     <select className={`status-select ${stCls(order.status)}`} value={order.status}
+                      disabled={order.status === 'Cancelled'} 
                       onChange={async e=>{try{await updateDoc(doc(db,'orders',order.id),{status:e.target.value});fetchOrders();}catch(err){showToast('আপডেট সমস্যা','error');}}}>
                       <option value="Pending">Pending ⏳</option>
                       <option value="Confirmed">Confirmed ✅</option>
@@ -616,7 +588,6 @@ function AppInner(){
     </div>
   );
 
-  // ══════ CUSTOMER VIEW ══════
   const coverStyle=info.coverPhoto
     ?{backgroundImage:`url(${info.coverPhoto})`,backgroundSize:'cover',backgroundPosition:'center'}
     :{background:info.coverGradient||'linear-gradient(135deg,#1a7a43,#27ae60)'};
@@ -625,7 +596,6 @@ function AppInner(){
     <div className="app-container">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
 
-      {/* Logout Confirm */}
       {showLogoutConfirm&&(
         <div className="modal-bg" onClick={()=>setShowLogoutConfirm(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -639,7 +609,6 @@ function AppInner(){
         </div>
       )}
 
-      {/* Emoji Picker */}
       {showEmojiPicker&&(
         <div className="modal-bg" onClick={()=>setShowEmojiPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -654,7 +623,6 @@ function AppInner(){
         </div>
       )}
 
-      {/* Cover Picker */}
       {showCoverPicker&&(
         <div className="modal-bg" onClick={()=>setShowCoverPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -686,7 +654,6 @@ function AppInner(){
         </div>
       )}
 
-      {/* FIX: Multiple notifications modal */}
       {showNotifModal&&(
         <div className="modal-bg" onClick={()=>setShowNotifModal(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -708,7 +675,6 @@ function AppInner(){
         </div>
       )}
 
-      {/* Drawer */}
       <div className={`drawer-overlay ${drawer?'active':''}`} onClick={()=>setDrawer(false)}/>
       <div className={`side-drawer ${drawer?'open':''}`}>
         <div className="drawer-head"><span>🌿 সাকিব স্টোর</span><button className="drawer-close" onClick={()=>setDrawer(false)}>✕</button></div>
@@ -721,7 +687,6 @@ function AppInner(){
         </ul>
       </div>
 
-      {/* Header */}
       {isHome?(
         <header className="main-header">
           <img src={headerImg} alt="header" className="header-bg-img" onError={e=>{e.target.style.display='none';}}/>
@@ -747,7 +712,6 @@ function AppInner(){
 
       <main className="main-content">
 
-        {/* HOME */}
         {tab==='home'&&(
           <div className="page-home">
             <div className="search-wrapper">
@@ -770,7 +734,6 @@ function AppInner(){
           </div>
         )}
 
-        {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
             <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
@@ -781,7 +744,6 @@ function AppInner(){
           </div>
         )}
 
-        {/* CART */}
         {tab==='cart'&&(
           <div className="page-cart">
             <h2 className="section-title text-center">আপনার কার্ট 🛒</h2>
@@ -845,7 +807,6 @@ function AppInner(){
           </div>
         )}
 
-        {/* PROFILE */}
         {tab==='profile'&&(
           <div className="page-profile">
             {!user?(
@@ -915,43 +876,43 @@ function AppInner(){
                   </div>
                 </div>
 
-                {/* FIX: Expandable order history with cancel option */}
                 <div className="order-history mt-20">
                   <h3 className="sub-title">📦 আপনার অর্ডার ({userOrders.length})</h3>
                   {userOrders.length===0?<p className="text-muted">কোনো অর্ডার নেই।</p>:(
                     userOrders.map(o=>(
-                      <div key={o.id} className={`history-card ${stCls(o.status)}`}>
-                        {/* Clickable header to expand */}
-                        <div className="hc-head" onClick={()=>setExpandedOrder(expandedOrder===o.id?null:o.id)} style={{cursor:'pointer'}}>
+                      <div key={o.id} className="history-card">
+                        <div className="hc-head" onClick={()=>setExpandedOrder(expandedOrder===o.id?null:o.id)}>
                           <div>
-                            <strong>Order #{String(o.id).slice(-6).toUpperCase()}</strong>
+                            <strong><span style={{color: '#1a7a43'}}>#</span>{String(o.id).slice(-6).toUpperCase()}</strong>
                             <p className="text-sm text-muted">{o.date}</p>
                           </div>
                           <div style={{display:'flex',alignItems:'center',gap:8}}>
                             <span className={`badge-status ${stCls(o.status)}`}>{o.status}</span>
-                            <span style={{fontSize:12,color:'var(--muted)'}}>{expandedOrder===o.id?'▲':'▼'}</span>
+                            <span style={{fontSize:16,color:'var(--muted)'}}>{expandedOrder===o.id?'▲':'▼'}</span>
                           </div>
                         </div>
-                        {/* Expanded details */}
                         {expandedOrder===o.id&&(
                           <div className="order-detail">
+                            <div className="user-info-box">
+                              <p><b>নাম:</b> {o.userInfo?.name} | <b>মোবাইল:</b> {o.userInfo?.phone}</p>
+                              <p><b>ঠিকানা:</b> {o.userInfo?.finalLocation}, {o.userInfo?.address}</p>
+                            </div>
                             <div style={{marginTop:10,marginBottom:8}}>
                               <p style={{fontWeight:700,fontSize:13,marginBottom:6}}>পণ্যসমূহ:</p>
                               {Array.isArray(o.items)&&o.items.map((item,i)=>(
-                                <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'4px 0',borderBottom:'1px dashed var(--border)'}}>
+                                <div key={i} className="history-item-row">
                                   <span>{item.name} × {item.qty}{parseUnit(item.unit).text}</span>
                                   <span style={{fontWeight:600}}>৳{bn((item.price/parseUnit(item.unit).baseQty)*item.qty)}</span>
                                 </div>
                               ))}
                             </div>
-                            <div style={{display:'flex',justifyContent:'space-between',fontWeight:700,fontSize:14,marginBottom:4}}>
-                              <span>মোট বিল:</span><span style={{color:'var(--green)'}}>৳{bn(o.total)}</span>
+                            <div className="history-total">
+                              <span>মোট বিল:</span><span>৳{bn(o.total)}</span>
                             </div>
-                            <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>পেমেন্ট: {o.paymentMethod}</p>
-                            {/* Cancel button only for Pending orders */}
+                            <p className="history-payment">পেমেন্ট: {o.paymentMethod}</p>
+                            {/* FIX: Show cancel button only if order is still Pending */}
                             {o.status==='Pending'&&(
-                              <button onClick={()=>cancelOrder(o.id)}
-                                style={{width:'100%',padding:'8px',background:'#fff',border:'1.5px solid var(--red)',borderRadius:8,color:'var(--red)',fontFamily:'var(--font)',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                              <button onClick={()=>cancelOrder(o.id)} className="btn-cancel-order">
                                 ❌ অর্ডার বাতিল করুন
                               </button>
                             )}
@@ -967,7 +928,6 @@ function AppInner(){
           </div>
         )}
 
-        {/* ABOUT */}
         {tab==='about'&&(
           <div className="about-view">
             <h2 className="text-green mb-20">About Us</h2>
