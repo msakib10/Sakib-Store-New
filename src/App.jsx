@@ -5,9 +5,10 @@ import {
   getDoc, setDoc, query, where, deleteDoc, onSnapshot
 } from "firebase/firestore";
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  signInAnonymously, onAuthStateChanged, signOut, updateProfile, sendEmailVerification
+  signInAnonymously, onAuthStateChanged, signOut, updateProfile,
+  sendEmailVerification
 } from "firebase/auth";
 import './App.css';
 
@@ -31,25 +32,23 @@ class ErrorBoundary extends Component {
 
 // ─── Firebase ──────────────────────────────────────────────────────────────────
 const FB = initializeApp({
-  apiKey: "AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
-  authDomain: "sakib-store1.firebaseapp.com",
-  projectId: "sakib-store1",
-  storageBucket: "sakib-store1.firebasestorage.app",
-  messagingSenderId: "514373347826",
-  appId: "1:514373347826:web:a778be5386cd5362d1636b"
+  apiKey:"AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
+  authDomain:"sakib-store1.firebaseapp.com",
+  projectId:"sakib-store1",
+  storageBucket:"sakib-store1.firebasestorage.app",
+  messagingSenderId:"514373347826",
+  appId:"1:514373347826:web:a778be5386cd5362d1636b"
 });
 const db = getFirestore(FB);
-
-// FIX: Standard auth initialization to prevent white screen issues
 const auth = getAuth(FB);
 const gp = new GoogleAuthProvider();
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
-const CATS = ['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
-const DLOCS = ["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
-const EMOJIS = ['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
-const DEFAULT_COVERS = ['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#e74c3c,#c0392b)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)'];
-const DEFINFO = {name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
+const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
+const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
+const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
+const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -59,12 +58,21 @@ const parseUnit=u=>{
 };
 const bn=n=>{try{if(n==null||n===''||isNaN(n))return'০';return Number(n).toFixed(0).replace(/\d/g,d=>'০১২৩৪৫৬৭৮৯'[d]);}catch(_){return String(n);}};
 const getDC=loc=>{if(["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর"].includes(loc))return 20;if(loc==="সিংগাইর উপজেলার ভেতরে")return 40;return 50;};
+
+// Standard order status styles — no garish colors
+const STATUS_STYLE = {
+  'Pending':     { bg:'#fff8e1', border:'#f59e0b', color:'#92400e', icon:'⏳', label:'অপেক্ষমাণ' },
+  'Confirmed':   { bg:'#ecfdf5', border:'#10b981', color:'#065f46', icon:'✅', label:'নিশ্চিত' },
+  'On Delivery': { bg:'#eff6ff', border:'#3b82f6', color:'#1e40af', icon:'🚚', label:'ডেলিভারিতে' },
+  'Delivered':   { bg:'#f0fdf4', border:'#16a34a', color:'#14532d', icon:'🏁', label:'পৌঁছেছে' },
+  'Cancelled':   { bg:'#fef2f2', border:'#ef4444', color:'#7f1d1d', icon:'❌', label:'বাতিল' },
+};
+const getStatusStyle = s => STATUS_STYLE[s] || STATUS_STYLE['Pending'];
 const stCls=s=>({Pending:'st-pending',Confirmed:'st-confirmed','On Delivery':'st-delivery',Delivered:'st-delivered',Cancelled:'st-cancelled'}[s]||'st-pending');
 
 const safeDate=d=>{
   try{
-    if(!d)return'';
-    if(typeof d==='string')return d;
+    if(!d)return'';if(typeof d==='string')return d;
     if(d?.toDate instanceof Function)return d.toDate().toLocaleString('bn-BD');
     if(d?.seconds)return new Date(d.seconds*1000).toLocaleString('bn-BD');
     if(d instanceof Date)return d.toLocaleString('bn-BD');
@@ -73,12 +81,12 @@ const safeDate=d=>{
 };
 
 const CACHE_KEY='sakib_products_cache';
-const saveProductsCache=products=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(products));}catch(_){}};
+const saveProductsCache=p=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(p));}catch(_){}};
 const loadProductsCache=()=>{try{const d=localStorage.getItem(CACHE_KEY);return d?JSON.parse(d):[];}catch(_){return[];}};
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 function AppInner(){
-  const [products,setProducts]=useState(loadProductsCache()); 
+  const [products,setProducts]=useState(loadProductsCache());
   const [headerImg,setHeaderImg]=useState('https://placehold.co/820x312/1a7a43/ffffff?text=Sakib+Store');
   const [notice,setNotice]=useState('সাকিব স্টোরে আপনাকে স্বাগতম! 🌿 সেরা মানের পণ্য, সাশ্রয়ী মূল্যে।');
   const [notifications,setNotifications]=useState([]);
@@ -87,6 +95,7 @@ function AppInner(){
   const [showEmojiPicker,setShowEmojiPicker]=useState(false);
   const [showCoverPicker,setShowCoverPicker]=useState(false);
   const [showLogoutConfirm,setShowLogoutConfirm]=useState(false);
+  const [appReady,setAppReady]=useState(false);
 
   const [tab,setTab]=useState('home');
   const [tabHist,setTabHist]=useState(['home']);
@@ -103,12 +112,17 @@ function AppInner(){
   const [info,setInfo]=useState({...DEFINFO});
   const [expandedOrder,setExpandedOrder]=useState(null);
 
+  // Auth states
   const [authMode,setAuthMode]=useState('choice');
   const [emailInput,setEmailInput]=useState('');
   const [passInput,setPassInput]=useState('');
   const [nameInput,setNameInput]=useState('');
   const [authLoading,setAuthLoading]=useState(false);
+  // FIX: Email verification banner
+  const [verifyBanner,setVerifyBanner]=useState(null); // {msg, type}
+  const [checkingVerify,setCheckingVerify]=useState(false);
 
+  // Admin states
   const [adminPass,setAdminPass]=useState('');
   const [allOrders,setAllOrders]=useState([]);
   const [adminLoading,setAdminLoading]=useState(false);
@@ -121,27 +135,55 @@ function AppInner(){
   const [newCoverUrl,setNewCoverUrl]=useState('');
 
   const [toast,setToast]=useState(null);
-  const showToast=useCallback((msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),3500);},[]);
+  const showToast=useCallback((msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),4000);},[]);
   const backTime=useRef(0);
   const orderUnsubRef=useRef(null);
 
+  // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(()=>{
     loadProducts();
     loadSettings();
 
+    // FIX: Handle Google redirect result — runs when page loads after Google redirect
+    getRedirectResult(auth)
+      .then(result=>{
+        if(result?.user){
+          showToast('গুগল লগইন সফল! ✅');
+        }
+      })
+      .catch(e=>{
+        const code=e?.code||'';
+        if(code==='auth/unauthorized-domain'){
+          showToast('Firebase Authorized Domains-এ msakib10.github.io যোগ করুন','error');
+        }else if(code && code!=='auth/no-auth-event'){
+          console.error('Redirect result error:',code);
+        }
+      });
+
     const unsub=onAuthStateChanged(auth,cu=>{
       try{
         if(cu){
-          setUser({id:cu.uid,isAnon:cu.isAnonymous,email:cu.email,name:cu.displayName});
+          setUser({id:cu.uid,isAnon:cu.isAnonymous,email:cu.email,name:cu.displayName,emailVerified:cu.emailVerified});
           loadUserData(cu.uid);
-          subscribeToUserOrders(cu.uid); 
+          subscribeToUserOrders(cu.uid);
+          // FIX: Show verify banner if email not verified
+          if(!cu.isAnonymous && !cu.emailVerified && cu.email){
+            setVerifyBanner({
+              msg:`📧 আপনার ইমেইল (${cu.email}) ভেরিফাই করুন। Spam ফোল্ডারও চেক করুন।`,
+              type:'warn'
+            });
+          } else {
+            setVerifyBanner(null);
+          }
         }else{
           setUser(null);
+          setVerifyBanner(null);
           if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
           try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
         }
       }catch(e){console.error('auth state:',e);}
-    },err=>{console.error('auth err:',err);});
+      setAppReady(true);
+    },err=>{console.error('auth err:',err);setAppReady(true);});
 
     window.history.pushState(null,null,window.location.pathname);
     const onPop=()=>{
@@ -176,12 +218,12 @@ function AppInner(){
     }catch(e){console.error('subscribeToUserOrders:',e);}
   };
 
+  // ── Data ──────────────────────────────────────────────────────────────────────
   const loadProducts=async()=>{
     try{
       const s=await getDocs(collection(db,'products'));
       const prods=s.docs.map(d=>({id:d.id,...d.data()}));
-      setProducts(prods);
-      saveProductsCache(prods); 
+      setProducts(prods);saveProductsCache(prods);
     }catch(e){
       const cached=loadProductsCache();
       if(cached.length>0){setProducts(cached);showToast('অফলাইন মোড: ক্যাশ থেকে পণ্য দেখানো হচ্ছে','warning');}
@@ -196,11 +238,8 @@ function AppInner(){
         if(d.header)setHeaderImg(d.header);
         if(d.notice)setNotice(d.notice);
         const now=Date.now();
-        if(Array.isArray(d.notifications)){
-          setNotifications(d.notifications.filter(n=>now<=n.expiresAt));
-        }else if(d.notification&&now<=d.notification.expiresAt){
-          setNotifications([d.notification]);
-        }
+        if(Array.isArray(d.notifications)){setNotifications(d.notifications.filter(n=>now<=n.expiresAt));}
+        else if(d.notification&&now<=d.notification.expiresAt){setNotifications([d.notification]);}
         if(Array.isArray(d.coverPhotos))setCoverPhotos(d.coverPhotos);
       }
     }catch(e){console.error('loadSettings',e);}
@@ -213,55 +252,100 @@ function AppInner(){
     }catch(e){console.error('loadUserData',e);}
   };
 
+  // ── Auth ──────────────────────────────────────────────────────────────────────
   const googleLogin=async()=>{
+    // FIX: Use signInWithRedirect — avoids sessionStorage/popup issues completely
+    // Page will redirect to Google, then come back and getRedirectResult() will handle it
     setAuthLoading(true);
     try{
-      const r=await signInWithPopup(auth,gp);
-      if(r?.user){showToast('গুগল লগইন সফল! ✅');setAuthMode('choice');goto('home');}
+      await signInWithRedirect(auth, gp);
+      // Page navigates away — code below won't run
     }catch(e){
       const code=e?.code||'';
-      showToast('লগইন সমস্যা: '+code,'error');
+      if(code==='auth/unauthorized-domain'){
+        showToast('Firebase Authorized Domains-এ msakib10.github.io যোগ করুন','error');
+      }else if(code==='auth/network-request-failed'){
+        showToast('ইন্টারনেট সংযোগ নেই।','error');
+      }else{
+        showToast('লগইন সমস্যা: '+code,'error');
+      }
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
+    // Note: setAuthLoading(false) NOT called here — page will redirect away
   };
 
+  // FIX: Email login — requires verified email
   const emailLogin=async()=>{
     if(!emailInput||!passInput)return showToast('ইমেইল ও পাসওয়ার্ড দিন!','error');
     setAuthLoading(true);
     try{
       const r=await signInWithEmailAndPassword(auth,emailInput,passInput);
-      // FIX: Check if email is verified
+      // FIX: Block login if email not verified
       if(!r.user.emailVerified){
-        showToast('আপনার ইমেইলটি এখনো ভেরিফাই করা হয়নি! দয়া করে ইনবক্স চেক করুন।','error');
-        await signOut(auth); // Force logout
+        await signOut(auth);
+        setVerifyBanner({
+          msg:`📧 আপনার ইমেইল ভেরিফাই হয়নি। ${emailInput} ইনবক্স ও Spam ফোল্ডার চেক করুন। ভেরিফাই করার পর লগইন করুন।`,
+          type:'warn'
+        });
+        showToast('ইমেইল ভেরিফাই করুন! Spam ফোল্ডারও চেক করুন।','error');
         setAuthLoading(false);
         return;
       }
       showToast('লগইন সফল! ✅');setAuthMode('choice');setEmailInput('');setPassInput('');
     }catch(e){
-      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential')showToast('ইমেইল বা পাসওয়ার্ড ভুল।','error');
-      else showToast('সমস্যা: '+e.code,'error');
+      if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'){
+        showToast('ইমেইল বা পাসওয়ার্ড ভুল।','error');
+      }else if(e.code==='auth/invalid-email'){
+        showToast('সঠিক ইমেইল ঠিকানা দিন।','error');
+      }else{
+        showToast('সমস্যা: '+e.code,'error');
+      }
     }
     setAuthLoading(false);
   };
 
+  // FIX: Email register — sends verification email
   const emailRegister=async()=>{
     if(!emailInput||!passInput||!nameInput)return showToast('নাম, ইমেইল ও পাসওয়ার্ড দিন!','error');
     if(passInput.length<6)return showToast('পাসওয়ার্ড কমপক্ষে ৬ অক্ষর হতে হবে।','error');
+    // FIX: Basic email format validation
+    const emailRegex=/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if(!emailRegex.test(emailInput))return showToast('সঠিক ইমেইল ঠিকানা দিন।','error');
     setAuthLoading(true);
     try{
       const r=await createUserWithEmailAndPassword(auth,emailInput,passInput);
       await updateProfile(r.user,{displayName:nameInput});
       // FIX: Send verification email
       await sendEmailVerification(r.user);
-      showToast('অ্যাকাউন্ট তৈরি হয়েছে! দয়া করে আপনার ইমেইলের ইনবক্স চেক করে ভেরিফাই করুন। ✅');
-      await signOut(auth); // Force user to login after verification
+      // Sign out immediately — require verification first
+      await signOut(auth);
       setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
+      // Show persistent banner
+      setVerifyBanner({
+        msg:`✅ অ্যাকাউন্ট তৈরি হয়েছে! এখন ${emailInput} ইনবক্স খুলুন — "Verify your email" বিষয়ক ইমেইল দেখুন (Spam ফোল্ডারও চেক করুন)। ভেরিফাই করার পর লগইন করুন।`,
+        type:'info'
+      });
     }catch(e){
       if(e.code==='auth/email-already-in-use')showToast('এই ইমেইল আগে থেকে ব্যবহার হচ্ছে।','error');
+      else if(e.code==='auth/invalid-email')showToast('সঠিক ইমেইল ঠিকানা দিন।','error');
       else showToast('সমস্যা: '+e.code,'error');
     }
     setAuthLoading(false);
+  };
+
+  // Resend verification email
+  const resendVerification=async()=>{
+    setCheckingVerify(true);
+    try{
+      // Try to sign in to get user object
+      const r=await signInWithEmailAndPassword(auth,emailInput,passInput);
+      if(!r.user.emailVerified){
+        await sendEmailVerification(r.user);
+        await signOut(auth);
+        showToast('ভেরিফিকেশন ইমেইল পাঠানো হয়েছে। Spam ফোল্ডারও চেক করুন।','success');
+      }
+    }catch(_){showToast('আবার পাঠাতে পারিনি। একটু পরে চেষ্টা করুন।','error');}
+    setCheckingVerify(false);
   };
 
   const guestLogin=async()=>{
@@ -291,6 +375,7 @@ function AppInner(){
     }catch(e){showToast('সেভ সমস্যা','error');}
   };
 
+  // ── Cart ──────────────────────────────────────────────────────────────────────
   const cartAction=(product,action)=>{
     if(action==='add'&&product.stock<=0){showToast('এই পণ্যের স্টক শেষ!','error');return;}
     const{baseQty,step}=parseUnit(product.unit);
@@ -321,22 +406,32 @@ function AppInner(){
         paymentMethod:info.paymentMethod,total:finalTotal,
         status:'Pending',
         date:new Date().toLocaleString('bn-BD'),
-        timestamp:Date.now()
+        timestamp:Date.now(),
+        cancelledByCustomer:false // track if customer cancelled
       });
-      for(const item of cart){const{baseQty}=parseUnit(item.unit);try{await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}catch(_){}}
+      for(const item of cart){
+        const{baseQty}=parseUnit(item.unit);
+        try{await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}catch(_){}
+      }
       if(user&&!user.isAnon)await setDoc(doc(db,'users',user.id),{info},{merge:true});
       showToast('অর্ডার সফল! 🎉');setCart([]);loadProducts();goto('profile');
     }catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
 
+  // FIX: Customer cancel — permanent, locks admin editing
   const cancelOrder=async(orderId)=>{
-    if(!window.confirm('অর্ডারটি বাতিল করতে চান?'))return;
+    if(!window.confirm('অর্ডারটি বাতিল করতে চান? এটি স্থায়ীভাবে বাতিল হবে।'))return;
     try{
-      await updateDoc(doc(db,'orders',orderId),{status:'Cancelled'});
-      showToast('অর্ডার সফলভাবে বাতিল করা হয়েছে।');
+      await updateDoc(doc(db,'orders',orderId),{
+        status:'Cancelled',
+        cancelledByCustomer:true, // FIX: marks as customer-cancelled
+        cancelledAt:Date.now()
+      });
+      showToast('অর্ডার বাতিল করা হয়েছে।');
     }catch(e){showToast('বাতিল করতে সমস্যা হয়েছে।','error');}
   };
 
+  // ── Admin ──────────────────────────────────────────────────────────────────────
   const fetchOrders=async()=>{
     setAdminLoading(true);setAdminErr('');
     try{
@@ -373,8 +468,7 @@ function AppInner(){
     try{
       const s=await getDoc(doc(db,'settings','general'));
       const existing=s.exists()&&Array.isArray(s.data().notifications)?s.data().notifications:[];
-      const filtered=existing.filter(n=>Date.now()<=n.expiresAt);
-      const updated=[...filtered,nd];
+      const updated=[...existing.filter(n=>Date.now()<=n.expiresAt),nd];
       await setDoc(doc(db,'settings','general'),{notifications:updated,notification:nd},{merge:true});
       setNotifications(updated);
       showToast('নোটিফিকেশন পাঠানো হয়েছে! ✅');setNewNotif({text:'',durationMins:60});
@@ -396,8 +490,7 @@ function AppInner(){
   const removeCoverPhoto=async idx=>{
     const updated=coverPhotos.filter((_,i)=>i!==idx);
     setCoverPhotos(updated);
-    try{await setDoc(doc(db,'settings','general'),{coverPhotos:updated},{merge:true});showToast('মুছে ফেলা হয়েছে।');}
-    catch(e){}
+    try{await setDoc(doc(db,'settings','general'),{coverPhotos:updated},{merge:true});showToast('মুছে ফেলা হয়েছে।');}catch(_){}
   };
 
   const filtered=products.filter(p=>{const c=homeCat==='সব পণ্য'||p.category===homeCat;const s=!search||p.name.toLowerCase().includes(search.toLowerCase());return c&&s;});
@@ -426,11 +519,20 @@ function AppInner(){
     );
   };
 
+  if(!appReady)return(
+    <div className="splash-screen">
+      <div style={{fontSize:72,marginBottom:8,animation:'pulse 1.5s ease infinite'}}>🌿</div>
+      <h2 style={{color:'#fff',fontSize:28,fontWeight:700,marginBottom:20}}>সাকিব স্টোর</h2>
+      <div className="splash-spinner"/>
+    </div>
+  );
+
+  // ══════ ADMIN LOGIN ══════
   if(mode==='adminLogin')return(
     <div className="fullscreen-center">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       <div className="admin-login-box">
-        <div className="admin-logo">🛡️</div>
+        <div style={{fontSize:56,marginBottom:12}}>🛡️</div>
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){setMode('admin');setAdminTab('stock');setAdminPass('');}else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
@@ -440,7 +542,8 @@ function AppInner(){
     </div>
   );
 
-  if(mode==='admin')return(
+  // ══════ ADMIN PANEL ══════
+  if(mode==='admin') return(
     <div className="admin-wrapper">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       <header className="admin-header">
@@ -454,6 +557,7 @@ function AppInner(){
       </div>
       <div className="admin-content">
 
+        {/* ── STOCK & SETTINGS ── */}
         {adminTab==='stock'&&(<>
           <div className="admin-grid-layout">
             <div className="admin-col">
@@ -470,10 +574,7 @@ function AppInner(){
                 <input type="text" placeholder="নোটিফিকেশন মেসেজ..." value={newNotif.text} onChange={e=>setNewNotif({...newNotif,text:e.target.value})}/>
                 <input type="number" className="mt-10" placeholder="কত মিনিট স্থায়ী?" value={newNotif.durationMins} onChange={e=>setNewNotif({...newNotif,durationMins:+e.target.value})}/>
                 <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
-                {activeNotifs.length>0&&(<div style={{marginTop:10}}>
-                  <p style={{fontSize:12,color:'var(--muted)',marginBottom:6}}>সক্রিয় নোটিফিকেশন ({activeNotifs.length}টি):</p>
-                  {activeNotifs.map(n=><div key={n.id} style={{fontSize:12,padding:'6px 10px',background:'#fff8e1',borderRadius:8,marginBottom:4}}>🔔 {n.text}</div>)}
-                </div>)}
+                {activeNotifs.length>0&&<div style={{marginTop:10}}>{activeNotifs.map(n=><div key={n.id} style={{fontSize:12,padding:'6px 10px',background:'#fff8e1',borderRadius:8,marginBottom:4}}>🔔 {n.text}</div>)}</div>}
               </div>
               <div className="admin-card">
                 <h4>🖼️ কভার ফটো</h4>
@@ -485,18 +586,13 @@ function AppInner(){
                 </div>
                 <div className="cover-admin-grid">
                   {coverPhotos.length===0&&<p style={{fontSize:12,color:'var(--muted)'}}>কোনো কভার ফটো নেই।</p>}
-                  {coverPhotos.map((url,i)=>(
-                    <div key={i} className="cover-admin-item">
-                      <img src={url} alt="" onError={e=>{e.target.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/>
-                      <button onClick={()=>removeCoverPhoto(i)}>✕</button>
-                    </div>
-                  ))}
+                  {coverPhotos.map((url,i)=>(<div key={i} className="cover-admin-item"><img src={url} alt="" onError={e=>{e.target.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/><button onClick={()=>removeCoverPhoto(i)}>✕</button></div>))}
                 </div>
               </div>
             </div>
             <div className="admin-col">
               <div className="admin-card">
-                <h3 className="text-green">{editId?"✏️ এডিট পণ্য":"➕ নতুন পণ্য"}</h3>
+                <h3 style={{color:'var(--green)',marginBottom:12}}>{editId?"✏️ এডিট পণ্য":"➕ নতুন পণ্য"}</h3>
                 <input type="text" placeholder="পণ্যের নাম" className="mb-10" value={newP.name} onChange={e=>setNewP({...newP,name:e.target.value})}/>
                 <div style={{display:'flex',gap:8,marginBottom:10}}>
                   <input type="number" placeholder="দাম (৳)" value={newP.price} onChange={e=>setNewP({...newP,price:e.target.value})}/>
@@ -515,12 +611,12 @@ function AppInner(){
               </div>
             </div>
           </div>
-          <h3 className="section-title mt-20">স্টক লিস্ট ({products.length}টি পণ্য)</h3>
+          <h3 className="section-title mt-20">স্টক লিস্ট ({products.length}টি)</h3>
           <div className="stock-list-grid">
             {products.map(p=>(
               <div key={p.id} className="stock-item-row">
                 <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.target.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
-                <div className="si-details"><strong>{p.name}</strong><p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#e74c3c':'inherit',fontWeight:700}}>{p.stock}</span></p></div>
+                <div className="si-details"><strong>{p.name}</strong><p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#dc2626':'inherit',fontWeight:700}}>{p.stock}</span></p></div>
                 <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP({...p,price:String(p.price),stock:String(p.stock)});window.scrollTo(0,0);}}>Edit</button>
                 <button className="btn-del" onClick={async()=>{if(window.confirm("ডিলিট করবেন?")){try{await deleteDoc(doc(db,'products',p.id));loadProducts();}catch(e){showToast('সমস্যা','error');}}}}>Del</button>
               </div>
@@ -528,9 +624,10 @@ function AppInner(){
           </div>
         </>)}
 
+        {/* ── ORDERS — FIX: Standard design + all info always visible ── */}
         {adminTab==='orders'&&(<>
-          <div className="admin-orders-header">
-            <h3 className="section-title">অর্ডার ম্যানেজমেন্ট</h3>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+            <h3 className="section-title" style={{marginBottom:0}}>অর্ডার ম্যানেজমেন্ট</h3>
             <button className="btn-refresh" onClick={fetchOrders}>↻ রিফ্রেশ</button>
           </div>
           <div className="order-filters">
@@ -542,45 +639,65 @@ function AppInner(){
             <div className="admin-loading-box"><div className="admin-spinner"/><p>লোড হচ্ছে...</p></div>
           ):adminErr?(
             <div className="admin-error-box">
-              <div style={{fontSize:36,marginBottom:10}}>⚠️</div><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-15" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>আবার চেষ্টা</button>
+              {adminErr==='RULES'?(<><p style={{fontWeight:700,marginBottom:8}}>🔒 Firestore Rules সমস্যা</p><div className="rules-code">{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`}</div><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
+              ):adminErr==='TIMEOUT'?(<><p style={{fontWeight:700}}>⏱️ সংযোগ ধীর</p><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
+              ):(<><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>)}
             </div>
           ):allOrders.length===0?(
             <div style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)'}}>
               <p style={{marginBottom:16}}>কোনো অর্ডার নেই।</p>
-              <button className="btn-primary" style={{width:'auto',padding:'10px 24px'}} onClick={fetchOrders}>লোড করুন</button>
+              <button className="btn-primary" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>লোড করুন</button>
             </div>
           ):(
             <div className="orders-list">
-              {allOrders.filter(o=>adminFilter==='All'||o.status===adminFilter).map(order=>(
-                <div key={order.id} className="admin-order-card">
-                  <div className="o-header">
-                    <strong><span style={{color: '#1a7a43'}}>#</span>{String(order.id).slice(-6).toUpperCase()}</strong>
-                    <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                      <span className={`badge-status ${stCls(order.status)}`}>{order.status}</span>
-                      <span className="o-date text-muted" style={{fontSize: '12px'}}>{order.date}</span>
+              {allOrders.filter(o=>adminFilter==='All'||o.status===adminFilter).map(order=>{
+                const ss=getStatusStyle(order.status);
+                const isCancelledByCustomer=order.cancelledByCustomer===true;
+                return(
+                  // FIX: Standard card design — white bg, color only on status badge & left border
+                  <div key={order.id} style={{background:'#fff',border:`1.5px solid #e5e7eb`,borderRadius:12,padding:16,marginBottom:12,borderLeft:`4px solid ${ss.border}`,boxShadow:'0 1px 4px rgba(0,0,0,0.06)'}}>
+                    {/* Header */}
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <strong style={{fontSize:14,color:'#111'}}>#{String(order.id).slice(-6).toUpperCase()}</strong>
+                        {isCancelledByCustomer&&<span style={{fontSize:10,background:'#fee2e2',color:'#991b1b',padding:'2px 8px',borderRadius:10,fontWeight:700}}>গ্রাহক বাতিল করেছেন</span>}
+                      </div>
+                      <span style={{fontSize:12,color:'#6b7280'}}>{order.date}</span>
+                    </div>
+                    {/* FIX: ALL customer info always visible */}
+                    <div style={{background:'#f9fafb',borderRadius:8,padding:'10px 12px',marginBottom:10}}>
+                      <p style={{fontSize:13,marginBottom:4}}><b>নাম:</b> {order.userInfo?.name||'—'} &nbsp;|&nbsp; <b>মোবাইল:</b> {order.userInfo?.phone||'—'}</p>
+                      <p style={{fontSize:13,marginBottom:4}}><b>ঠিকানা:</b> {order.userInfo?.finalLocation||''}, {order.userInfo?.address||''}, {order.userInfo?.area||''}, {order.userInfo?.district||''}</p>
+                      <p style={{fontSize:13,color:'#374151'}}><b>পণ্য:</b> {Array.isArray(order.items)&&order.items.map(i=>`${i.name}(${i.qty}${parseUnit(i.unit).text})`).join(', ')}</p>
+                    </div>
+                    <p style={{fontSize:13,marginBottom:8}}><b>পেমেন্ট:</b> <span style={{color:'var(--green)',fontWeight:700}}>{order.paymentMethod}</span> &nbsp;|&nbsp; <b>মোট:</b> <span style={{fontWeight:700}}>৳{order.total}</span></p>
+                    {(order.paymentMethod==='Bkash'||order.paymentMethod==='Nogod')&&<div style={{background:'#fff8e1',padding:'6px 10px',borderRadius:8,fontSize:12,fontFamily:'monospace',marginBottom:8}}>TrxID: {order.userInfo?.transactionId} | Sender: {order.userInfo?.senderNumber}</div>}
+                    {/* Status badge + selector */}
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <span style={{fontSize:13,fontWeight:700,background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'4px 12px',borderRadius:20,whiteSpace:'nowrap'}}>
+                        {ss.icon} {order.status}
+                      </span>
+                      {/* FIX: Lock admin if customer cancelled */}
+                      {isCancelledByCustomer ? (
+                        <span style={{fontSize:12,color:'#6b7280',flex:1}}>🔒 গ্রাহক বাতিল করেছেন — পরিবর্তন সম্ভব নয়</span>
+                      ):(
+                        <select style={{flex:1,padding:'7px 10px',borderRadius:9,border:'1.5px solid #d1d5db',fontFamily:'var(--font)',fontSize:13,fontWeight:600,cursor:'pointer',outline:'none'}}
+                          value={order.status}
+                          onChange={async e=>{
+                            try{await updateDoc(doc(db,'orders',order.id),{status:e.target.value});fetchOrders();}
+                            catch(err){showToast('আপডেট সমস্যা','error');}
+                          }}>
+                          <option value="Pending">Pending ⏳</option>
+                          <option value="Confirmed">Confirmed ✅</option>
+                          <option value="On Delivery">On Delivery 🚚</option>
+                          <option value="Delivered">Delivered 🏁</option>
+                          <option value="Cancelled">Cancelled ❌</option>
+                        </select>
+                      )}
                     </div>
                   </div>
-                  <p><b>নাম:</b> {order.userInfo?.name} | <b>মোবাইল:</b> {order.userInfo?.phone}</p>
-                  <p><b>ঠিকানা:</b> {order.userInfo?.finalLocation}, {order.userInfo?.address}, {order.userInfo?.area}, {order.userInfo?.district}</p>
-                  <p className="o-items-text"><b>পণ্য:</b> {Array.isArray(order.items)&&order.items.map(i=>`${i.name}(${i.qty}${parseUnit(i.unit).text})`).join(', ')}</p>
-                  <p><b>পেমেন্ট:</b> <span className="highlight-text">{order.paymentMethod}</span> | <b>মোট:</b> ৳{bn(order.total)}</p>
-                  {(order.paymentMethod==='Bkash'||order.paymentMethod==='Nogod')&&<p className="trx-box">TrxID: {order.userInfo?.transactionId} | Sender: {order.userInfo?.senderNumber}</p>}
-                  
-                  <div className="status-updater">
-                    <label>স্টেটাস পরিবর্তন:</label>
-                    {/* FIX: If customer cancelled, admin cannot change it anymore */}
-                    <select className={`status-select ${stCls(order.status)}`} value={order.status}
-                      disabled={order.status === 'Cancelled'} 
-                      onChange={async e=>{try{await updateDoc(doc(db,'orders',order.id),{status:e.target.value});fetchOrders();}catch(err){showToast('আপডেট সমস্যা','error');}}}>
-                      <option value="Pending">Pending ⏳</option>
-                      <option value="Confirmed">Confirmed ✅</option>
-                      <option value="On Delivery">On Delivery 🚚</option>
-                      <option value="Delivered">Delivered 🏁</option>
-                      <option value="Cancelled">Cancelled ❌</option>
-                    </select>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>)}
@@ -588,6 +705,7 @@ function AppInner(){
     </div>
   );
 
+  // ══════ CUSTOMER VIEW ══════
   const coverStyle=info.coverPhoto
     ?{backgroundImage:`url(${info.coverPhoto})`,backgroundSize:'cover',backgroundPosition:'center'}
     :{background:info.coverGradient||'linear-gradient(135deg,#1a7a43,#27ae60)'};
@@ -596,10 +714,26 @@ function AppInner(){
     <div className="app-container">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
 
+      {/* FIX: Persistent email verification banner */}
+      {verifyBanner&&(
+        <div style={{
+          position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',
+          width:'100%',maxWidth:480,zIndex:9998,
+          background: verifyBanner.type==='info'?'#dbeafe':'#fef9c3',
+          borderBottom:`2px solid ${verifyBanner.type==='info'?'#3b82f6':'#f59e0b'}`,
+          padding:'10px 44px 10px 16px',
+          fontSize:13,lineHeight:1.5,color:'#1e3a5f'
+        }}>
+          {verifyBanner.msg}
+          <button onClick={()=>setVerifyBanner(null)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',fontSize:18,cursor:'pointer',color:'#374151',padding:'0 4px'}}>✕</button>
+        </div>
+      )}
+
+      {/* Logout Confirm */}
       {showLogoutConfirm&&(
         <div className="modal-bg" onClick={()=>setShowLogoutConfirm(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-green mb-10">🚪 লগ আউট করবেন?</h3>
+            <h3 style={{color:'var(--green)',marginBottom:12}}>🚪 লগ আউট করবেন?</h3>
             <p style={{lineHeight:1.6,marginBottom:16}}>{user?.isAnon?'লগ আউট করলে গেস্ট ডেটা মুছে যাবে।':'লগইন করলে আবার সব দেখতে পাবেন।'}</p>
             <div style={{display:'flex',gap:10}}>
               <button className="btn-danger flex-1" onClick={doLogout}>হ্যাঁ, লগ আউট</button>
@@ -609,24 +743,23 @@ function AppInner(){
         </div>
       )}
 
+      {/* Emoji Picker */}
       {showEmojiPicker&&(
         <div className="modal-bg" onClick={()=>setShowEmojiPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-green mb-10">প্রোফাইল ইমোজি বেছে নিন</h3>
+            <h3 style={{color:'var(--green)',marginBottom:10}}>প্রোফাইল ইমোজি বেছে নিন</h3>
             <div className="emoji-grid">
-              {EMOJIS.map(em=>(
-                <button key={em} className={`emoji-btn ${info.profileEmoji===em?'active':''}`}
-                  onClick={()=>{const upd={...info,profileEmoji:em};setInfo(upd);saveProfile(upd);setShowEmojiPicker(false);}}>{em}</button>
-              ))}
+              {EMOJIS.map(em=><button key={em} className={`emoji-btn ${info.profileEmoji===em?'active':''}`} onClick={()=>{const upd={...info,profileEmoji:em};setInfo(upd);saveProfile(upd);setShowEmojiPicker(false);}}>{em}</button>)}
             </div>
           </div>
         </div>
       )}
 
+      {/* Cover Picker */}
       {showCoverPicker&&(
         <div className="modal-bg" onClick={()=>setShowCoverPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-green mb-10">কভার বেছে নিন</h3>
+            <h3 style={{color:'var(--green)',marginBottom:10}}>কভার বেছে নিন</h3>
             <p style={{fontSize:12,color:'var(--muted)',marginBottom:8}}>ডিফল্ট ডিজাইন:</p>
             <div className="cover-picker-grid">
               {DEFAULT_COVERS.map((g,i)=>(
@@ -637,8 +770,7 @@ function AppInner(){
                 </div>
               ))}
             </div>
-            {coverPhotos.length>0&&(<>
-              <p style={{fontSize:12,color:'var(--muted)',margin:'12px 0 8px'}}>কাস্টম ছবি:</p>
+            {coverPhotos.length>0&&(<><p style={{fontSize:12,color:'var(--muted)',margin:'12px 0 8px'}}>কাস্টম ছবি:</p>
               <div className="cover-picker-grid">
                 {coverPhotos.map((url,i)=>(
                   <div key={i} className={`cover-pick-item ${info.coverPhoto===url?'active':''}`}
@@ -654,19 +786,16 @@ function AppInner(){
         </div>
       )}
 
+      {/* Notification Modal */}
       {showNotifModal&&(
         <div className="modal-bg" onClick={()=>setShowNotifModal(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
-            <h3 className="text-green mb-15">🔔 নোটিফিকেশন</h3>
-            {activeNotifs.length===0?(
-              <p className="text-muted">এই মুহূর্তে কোনো নোটিফিকেশন নেই।</p>
-            ):(
+            <h3 style={{color:'var(--green)',marginBottom:12}}>🔔 নোটিফিকেশন</h3>
+            {activeNotifs.length===0?<p style={{color:'var(--muted)'}}>এই মুহূর্তে কোনো নোটিফিকেশন নেই।</p>:(
               activeNotifs.map((n,i)=>(
                 <div key={n.id||i} style={{background:'var(--green-pale)',borderRadius:10,padding:'12px 14px',marginBottom:10,borderLeft:'4px solid var(--green)'}}>
                   <p style={{lineHeight:1.6,fontSize:14}}>{n.text}</p>
-                  <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>
-                    মেয়াদ: {new Date(n.expiresAt).toLocaleString('bn-BD')}
-                  </p>
+                  <p style={{fontSize:11,color:'var(--muted)',marginTop:6}}>মেয়াদ: {new Date(n.expiresAt).toLocaleString('bn-BD')}</p>
                 </div>
               ))
             )}
@@ -675,6 +804,7 @@ function AppInner(){
         </div>
       )}
 
+      {/* Drawer */}
       <div className={`drawer-overlay ${drawer?'active':''}`} onClick={()=>setDrawer(false)}/>
       <div className={`side-drawer ${drawer?'open':''}`}>
         <div className="drawer-head"><span>🌿 সাকিব স্টোর</span><button className="drawer-close" onClick={()=>setDrawer(false)}>✕</button></div>
@@ -687,8 +817,9 @@ function AppInner(){
         </ul>
       </div>
 
+      {/* Header */}
       {isHome?(
-        <header className="main-header">
+        <header className="main-header" style={{marginTop: verifyBanner?44:0}}>
           <img src={headerImg} alt="header" className="header-bg-img" onError={e=>{e.target.style.display='none';}}/>
           <div className="header-overlay">
             <button className="icon-btn" onClick={()=>setDrawer(true)}>☰</button>
@@ -699,7 +830,7 @@ function AppInner(){
           </div>
         </header>
       ):(
-        <header className="mini-header">
+        <header className="mini-header" style={{marginTop: verifyBanner?44:0}}>
           <button className="icon-btn-dark" onClick={()=>setDrawer(true)}>☰</button>
           <div className="mini-header-title">সাকিব স্টোর</div>
           <button className="icon-btn-dark notif-btn" onClick={()=>setShowNotifModal(true)}>
@@ -712,6 +843,7 @@ function AppInner(){
 
       <main className="main-content">
 
+        {/* HOME */}
         {tab==='home'&&(
           <div className="page-home">
             <div className="search-wrapper">
@@ -724,7 +856,7 @@ function AppInner(){
             </div>
             {filtered.length===0?(
               <div className="empty-state text-center mt-30">
-                <div className="empty-icon">🔍</div>
+                <div style={{fontSize:60,marginBottom:12}}>🔍</div>
                 <p>{search?`"${search}" পাওয়া যায়নি`:'এই ক্যাটাগরিতে পণ্য নেই'}</p>
                 <button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={()=>{setHomeCat('সব পণ্য');setSearch('');}}>সব পণ্য দেখুন</button>
               </div>
@@ -734,6 +866,7 @@ function AppInner(){
           </div>
         )}
 
+        {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
             <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
@@ -744,18 +877,19 @@ function AppInner(){
           </div>
         )}
 
+        {/* CART */}
         {tab==='cart'&&(
           <div className="page-cart">
             <h2 className="section-title text-center">আপনার কার্ট 🛒</h2>
             {cart.length===0?(
-              <div className="empty-state text-center mt-30"><div className="empty-icon">🛒</div><p>কার্ট খালি!</p><button className="btn-primary mt-10" onClick={()=>goto('home')}>পণ্য বাছাই করুন</button></div>
+              <div className="empty-state text-center mt-30"><div style={{fontSize:60,marginBottom:12}}>🛒</div><p>কার্ট খালি!</p><button className="btn-primary mt-10" onClick={()=>goto('home')}>পণ্য বাছাই করুন</button></div>
             ):(
               <div className="cart-checkout-wrapper">
                 <div className="cart-items-list">
                   {cart.map(item=>(
                     <div key={item.id} className="cart-item">
                       <img src={item.image||'https://placehold.co/50x50/e8f5e9/27ae60?text=P'} alt={item.name} className="cart-item-img"/>
-                      <div className="c-info"><strong>{item.name}</strong><p className="text-muted">{bn(item.qty)}{parseUnit(item.unit).text}</p></div>
+                      <div className="c-info"><strong>{item.name}</strong><p style={{fontSize:12,color:'var(--muted)'}}>{bn(item.qty)}{parseUnit(item.unit).text}</p></div>
                       <div className="c-right">
                         <div className="c-price">৳{bn((item.price/parseUnit(item.unit).baseQty)*item.qty)}</div>
                         <div className="qty-controls small">
@@ -790,7 +924,7 @@ function AppInner(){
                   {(info.paymentMethod==='Bkash'||info.paymentMethod==='Nogod')&&(
                     <div className="payment-instructions mt-10">
                       <p className="pay-number">📲 Personal: <strong>01723539738</strong></p>
-                      <p className="text-muted text-sm mb-10">উপরের নম্বরে Send Money করুন:</p>
+                      <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>উপরের নম্বরে Send Money করুন:</p>
                       <input type="number" placeholder="যে নম্বর থেকে পাঠিয়েছেন *" value={info.senderNumber} onChange={e=>setInfo({...info,senderNumber:e.target.value})} className="mb-10"/>
                       <input type="text" placeholder="Transaction ID *" value={info.transactionId} onChange={e=>setInfo({...info,transactionId:e.target.value})}/>
                     </div>
@@ -807,14 +941,16 @@ function AppInner(){
           </div>
         )}
 
+        {/* PROFILE */}
         {tab==='profile'&&(
           <div className="page-profile">
             {!user?(
               <div className="auth-screen text-center">
-                <div className="auth-logo">🛒</div>
+                <div style={{fontSize:64,marginBottom:12}}>🛒</div>
                 <h2 className="mb-10">লগইন করুন</h2>
+
                 {authMode==='choice'&&(<>
-                  <p className="text-muted mb-20">অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন।</p>
+                  <p style={{color:'var(--muted)',marginBottom:20,fontSize:14}}>অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন।</p>
                   <button className="btn-google mb-10" onClick={googleLogin} disabled={authLoading}>
                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="20"/>
                     {authLoading?'লোড হচ্ছে...':'Google দিয়ে লগইন'}
@@ -823,20 +959,22 @@ function AppInner(){
                   <button className="btn-email-reg mb-10" onClick={()=>setAuthMode('email-register')}>✏️ নতুন অ্যাকাউন্ট তৈরি করুন</button>
                   <div className="divider">অথবা</div>
                   <button className="btn-outline mt-10" onClick={guestLogin}>👤 গেস্ট হিসেবে প্রবেশ করুন</button>
-                  <p className="text-muted mt-15 text-sm">Google/Email লগইন করলে ডেটা চিরস্থায়ী থাকে।</p>
+                  <p style={{color:'var(--muted)',marginTop:15,fontSize:12}}>Google/Email লগইন করলে ডেটা চিরস্থায়ী থাকে।</p>
                 </>)}
+
                 {authMode==='email-login'&&(
                   <div style={{width:'100%',maxWidth:300}}>
-                    <p className="text-muted mb-15">ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন</p>
+                    <p style={{color:'var(--muted)',marginBottom:15,fontSize:14}}>ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন</p>
                     <input type="email" placeholder="ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
                     <input type="password" placeholder="পাসওয়ার্ড" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15" onKeyDown={e=>{if(e.key==='Enter')emailLogin();}}/>
                     <button className="btn-primary mb-10" onClick={emailLogin} disabled={authLoading}>{authLoading?'লোড...':'লগইন করুন'}</button>
                     <button className="btn-outline" onClick={()=>{setAuthMode('choice');setEmailInput('');setPassInput('');}}>← ফিরে যান</button>
                   </div>
                 )}
+
                 {authMode==='email-register'&&(
                   <div style={{width:'100%',maxWidth:300}}>
-                    <p className="text-muted mb-15">নতুন অ্যাকাউন্ট তৈরি করুন</p>
+                    <p style={{color:'var(--muted)',marginBottom:15,fontSize:14}}>নতুন অ্যাকাউন্ট তৈরি করুন</p>
                     <input type="text" placeholder="আপনার নাম" value={nameInput} onChange={e=>setNameInput(e.target.value)} className="auth-input mb-10"/>
                     <input type="email" placeholder="ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
                     <input type="password" placeholder="পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15"/>
@@ -859,11 +997,13 @@ function AppInner(){
                     <div className="user-titles">
                       <h3>{info.name||(user.isAnon?'গেস্ট ইউজার':user.name||'নাম দিন')}</h3>
                       <p>{user.email||(user.isAnon?'Guest Account':'')}</p>
+                      {/* FIX: Show verify status */}
+                      {user.email&&!user.isAnon&&!user.emailVerified&&<p style={{fontSize:11,color:'#d97706',fontWeight:600}}>⚠️ ইমেইল ভেরিফাই করুন</p>}
                     </div>
                   </div>
                 </div>
-                <div className="profile-edit-card mt-20">
-                  <h3 className="sub-title">✏️ আপনার তথ্য</h3>
+                <div style={{padding:'0 16px'}}>
+                  <h3 className="sub-title mt-20">✏️ আপনার তথ্য</h3>
                   <div className="form-group">
                     <input type="text" placeholder="আপনার নাম" value={info.name} onChange={e=>setInfo({...info,name:e.target.value})}/>
                     <input type="number" placeholder="মোবাইল নম্বর" value={info.phone} onChange={e=>setInfo({...info,phone:e.target.value})}/>
@@ -876,63 +1016,79 @@ function AppInner(){
                   </div>
                 </div>
 
-                <div className="order-history mt-20">
+                {/* FIX: Orders — standard design, all info visible, expandable */}
+                <div style={{padding:'0 16px',marginTop:20}}>
                   <h3 className="sub-title">📦 আপনার অর্ডার ({userOrders.length})</h3>
-                  {userOrders.length===0?<p className="text-muted">কোনো অর্ডার নেই।</p>:(
-                    userOrders.map(o=>(
-                      <div key={o.id} className="history-card">
-                        <div className="hc-head" onClick={()=>setExpandedOrder(expandedOrder===o.id?null:o.id)}>
-                          <div>
-                            <strong><span style={{color: '#1a7a43'}}>#</span>{String(o.id).slice(-6).toUpperCase()}</strong>
-                            <p className="text-sm text-muted">{o.date}</p>
-                          </div>
-                          <div style={{display:'flex',alignItems:'center',gap:8}}>
-                            <span className={`badge-status ${stCls(o.status)}`}>{o.status}</span>
-                            <span style={{fontSize:16,color:'var(--muted)'}}>{expandedOrder===o.id?'▲':'▼'}</span>
-                          </div>
-                        </div>
-                        {expandedOrder===o.id&&(
-                          <div className="order-detail">
-                            <div className="user-info-box">
-                              <p><b>নাম:</b> {o.userInfo?.name} | <b>মোবাইল:</b> {o.userInfo?.phone}</p>
-                              <p><b>ঠিকানা:</b> {o.userInfo?.finalLocation}, {o.userInfo?.address}</p>
+                  {userOrders.length===0?<p style={{color:'var(--muted)'}}>কোনো অর্ডার নেই।</p>:(
+                    userOrders.map(o=>{
+                      const ss=getStatusStyle(o.status);
+                      const isExpanded=expandedOrder===o.id;
+                      const isCancelledByCustomer=o.cancelledByCustomer===true;
+                      return(
+                        <div key={o.id} style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,marginBottom:10,overflow:'hidden',borderLeft:`4px solid ${ss.border}`}}>
+                          {/* Clickable header */}
+                          <div style={{padding:'12px 14px',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center'}} onClick={()=>setExpandedOrder(isExpanded?null:o.id)}>
+                            <div>
+                              <strong style={{fontSize:13}}>Order #{String(o.id).slice(-6).toUpperCase()}</strong>
+                              <p style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{o.date}</p>
                             </div>
-                            <div style={{marginTop:10,marginBottom:8}}>
-                              <p style={{fontWeight:700,fontSize:13,marginBottom:6}}>পণ্যসমূহ:</p>
+                            <div style={{display:'flex',alignItems:'center',gap:8}}>
+                              <span style={{fontSize:12,fontWeight:700,background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'3px 10px',borderRadius:14}}>
+                                {ss.icon} {o.status}
+                              </span>
+                              <span style={{fontSize:11,color:'var(--muted)'}}>{isExpanded?'▲':'▼'}</span>
+                            </div>
+                          </div>
+                          {/* FIX: Always show basic summary even collapsed */}
+                          <div style={{paddingLeft:14,paddingRight:14,paddingBottom:isExpanded?0:12}}>
+                            <p style={{fontSize:13,color:'#374151'}}>
+                              <b>পণ্য:</b> {Array.isArray(o.items)&&o.items.slice(0,2).map(i=>`${i.name}(${i.qty})`).join(', ')}
+                              {o.items?.length>2&&` এবং আরও ${o.items.length-2}টি`}
+                            </p>
+                            <p style={{fontSize:13,fontWeight:700,color:'var(--green)',marginTop:4}}>মোট: ৳{bn(o.total)}</p>
+                          </div>
+                          {/* Expanded details */}
+                          {isExpanded&&(
+                            <div style={{borderTop:'1px dashed #e5e7eb',padding:'12px 14px',background:'#fafafa'}}>
                               {Array.isArray(o.items)&&o.items.map((item,i)=>(
-                                <div key={i} className="history-item-row">
+                                <div key={i} style={{display:'flex',justifyContent:'space-between',fontSize:13,padding:'4px 0',borderBottom:'1px dashed #f0f0f0'}}>
                                   <span>{item.name} × {item.qty}{parseUnit(item.unit).text}</span>
                                   <span style={{fontWeight:600}}>৳{bn((item.price/parseUnit(item.unit).baseQty)*item.qty)}</span>
                                 </div>
                               ))}
+                              <div style={{display:'flex',justifyContent:'space-between',fontWeight:700,fontSize:14,marginTop:8,marginBottom:4}}>
+                                <span>মোট বিল:</span><span style={{color:'var(--green)'}}>৳{bn(o.total)}</span>
+                              </div>
+                              <p style={{fontSize:12,color:'var(--muted)',marginBottom:10}}>পেমেন্ট: {o.paymentMethod} | ডেলিভারি: {o.userInfo?.finalLocation}</p>
+                              {/* FIX: Cancel only if Pending and not already customer-cancelled */}
+                              {o.status==='Pending'&&!isCancelledByCustomer&&(
+                                <button onClick={()=>cancelOrder(o.id)}
+                                  style={{width:'100%',padding:'8px',background:'#fff',border:'1.5px solid #ef4444',borderRadius:8,color:'#ef4444',fontFamily:'var(--font)',fontSize:13,fontWeight:700,cursor:'pointer',marginTop:4}}>
+                                  ❌ অর্ডার বাতিল করুন
+                                </button>
+                              )}
+                              {isCancelledByCustomer&&<p style={{fontSize:12,color:'#6b7280',marginTop:6,textAlign:'center'}}>আপনি এই অর্ডারটি বাতিল করেছেন।</p>}
                             </div>
-                            <div className="history-total">
-                              <span>মোট বিল:</span><span>৳{bn(o.total)}</span>
-                            </div>
-                            <p className="history-payment">পেমেন্ট: {o.paymentMethod}</p>
-                            {/* FIX: Show cancel button only if order is still Pending */}
-                            {o.status==='Pending'&&(
-                              <button onClick={()=>cancelOrder(o.id)} className="btn-cancel-order">
-                                ❌ অর্ডার বাতিল করুন
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
+                          )}
+                        </div>
+                      );
+                    })
                   )}
                 </div>
-                <button className="btn-danger w-full mt-20" onClick={confirmLogout}>🚪 লগ আউট করুন</button>
+                <div style={{padding:'0 16px'}}>
+                  <button className="btn-danger w-full mt-20" onClick={confirmLogout}>🚪 লগ আউট করুন</button>
+                </div>
               </div>
             )}
           </div>
         )}
 
+        {/* ABOUT */}
         {tab==='about'&&(
           <div className="about-view">
-            <h2 className="text-green mb-20">About Us</h2>
-            <div className="about-logo">🌿</div>
-            <h3 className="mb-10">সাকিব স্টোর</h3>
+            <h2 style={{color:'var(--green)',marginBottom:20}}>About Us</h2>
+            <div style={{fontSize:64,marginBottom:8}}>🌿</div>
+            <h3 style={{marginBottom:10}}>সাকিব স্টোর</h3>
             <p className="about-desc">সাকিব স্টোর একটি বিশ্বস্ত অনলাইন গ্রোসারি শপ। সাশ্রয়ী মূল্যে ফ্রেশ পণ্য আপনাদের দুয়ারে পৌঁছে দেই।</p>
             <div className="contact-box mt-30">
               <p className="contact-title">📞 যোগাযোগ:</p>
