@@ -48,7 +48,7 @@ const CATS=['সব পণ্য','পাইকারি','চাল','ডাল
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
 const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFINFO={name:'',phone:'',locationType:'',district:'',area:'',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -135,7 +135,13 @@ function AppInner(){
   const [newCoverUrl,setNewCoverUrl]=useState('');
 
   // Admin roles
-  const [adminRole,setAdminRole]=useState(null); // 'master','super_admin',null
+  // FIX: Restore admin session from localStorage (persists across page reloads)
+  const [adminRole,setAdminRole]=useState(()=>{
+    try{return localStorage.getItem('sakib_admin_role')||null;}catch(_){return null;}
+  });
+  const [adminSessionUid,setAdminSessionUid]=useState(()=>{
+    try{return localStorage.getItem('sakib_admin_uid')||null;}catch(_){return null;}
+  });
   const [adminsList,setAdminsList]=useState([]);
   const [showAddAdmin,setShowAddAdmin]=useState(false);
   const [newAdminUid,setNewAdminUid]=useState('');
@@ -149,10 +155,15 @@ function AppInner(){
   const backTime=useRef(0);
   const orderUnsubRef=useRef(null);
 
-  // Auto-redirect to admin panel if user is admin and tries to go to adminLogin
+  // Auto-redirect to admin panel if user is already admin (localStorage session)
   useEffect(()=>{
-    if(mode==='adminLogin'&&(adminRole==='master'||adminRole==='super_admin'||adminRole==='editor')){
-      setMode('admin');setAdminTab('stock');loadAdmins();
+    if(mode==='adminLogin'&&adminRole){
+      // Already has admin role (from localStorage) → skip password
+      setMode('admin');setAdminTab('stock');
+      loadAdmins();
+    }
+    if(mode==='admin'){
+      loadAdmins();
     }
   },[mode,adminRole]);
 
@@ -278,9 +289,26 @@ function AppInner(){
   const loadAdminRole=async(uid)=>{
     try{
       const d=await getDoc(doc(db,'Admins',uid));
-      if(d.exists())setAdminRole(d.data().role||null);
-      else setAdminRole(null);
+      if(d.exists()){
+        const role=d.data().role||null;
+        setAdminRole(role);
+        // FIX: Save to localStorage so admin stays logged in across refreshes
+        if(role){
+          localStorage.setItem('sakib_admin_role',role);
+          localStorage.setItem('sakib_admin_uid',uid);
+        }
+      }else{
+        setAdminRole(null);
+        localStorage.removeItem('sakib_admin_role');
+        localStorage.removeItem('sakib_admin_uid');
+      }
     }catch(_){setAdminRole(null);}
+  };
+
+  const clearAdminSession=()=>{
+    setAdminRole(null);
+    localStorage.removeItem('sakib_admin_role');
+    localStorage.removeItem('sakib_admin_uid');
   };
 
   const addAdmin=async()=>{
@@ -415,6 +443,9 @@ function AppInner(){
     try{await signOut(auth);}catch(_){}
     setInfo({...DEFINFO});setCart([]);setUserOrders([]);
     localStorage.removeItem('guestInfo');
+    // FIX: Clear admin session on logout too
+    clearAdminSession();
+    setMode('customer');
     goto('home');
   };
 
@@ -591,8 +622,18 @@ function AppInner(){
         <div style={{fontSize:56,marginBottom:12}}>🛡️</div>
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();if(user)loadAdminRole(user.id);}else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
-        <button className="btn-primary" onClick={()=>{if(adminPass==='sakib123'){setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();if(user)loadAdminRole(user.id);}else showToast('ভুল পাসওয়ার্ড!','error');}}>লগইন</button>
+          onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){
+            setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();
+            if(user&&!user.isAnon)loadAdminRole(user.id);
+            else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+          }else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
+        <button className="btn-primary" onClick={()=>{
+          if(adminPass==='sakib123'){
+            setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();
+            if(user&&!user.isAnon)loadAdminRole(user.id);
+            else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+          }else showToast('ভুল পাসওয়ার্ড!','error');
+        }}>লগইন</button>
         <button className="btn-outline mt-10" onClick={()=>{setMode('customer');goto('home');}}>← ফিরে যান</button>
       </div>
     </div>
@@ -604,6 +645,10 @@ function AppInner(){
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       <header className="admin-header">
         <button className="admin-back-btn" onClick={()=>{setMode('customer');goto('home');}}>← বের হোন</button>
+        <button className="admin-back-btn" style={{marginLeft:'auto',background:'rgba(255,255,255,0.1)',fontSize:12}}
+          onClick={()=>{clearAdminSession();setMode('customer');goto('home');showToast('Admin logout হয়েছে।');}}>
+          🚪 লগআউট
+        </button>
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <span/>
       </header>
@@ -1207,12 +1252,13 @@ function AppInner(){
         {/* ABOUT */}
         {tab==='about'&&(
           <div className="about-view">
-            {/* FIX: Click area for 7-click secret — only on the logo/title area */}
-            <div onClick={()=>{
-              if(adminRole){setMode('admin');setAdminTab('stock');loadAdmins();return;}
-              const n=aboutClicks+1;setAboutClicks(n);
-              if(n>=7){setAboutClicks(0);}
-            }} style={{cursor:'default'}}>
+            {/* FIX: Long-press 2 seconds on logo → show admin access */}
+            <div
+              onMouseDown={()=>{const t=setTimeout(()=>{setAboutClicks(7);},2000);setAboutClicks(-t);}}
+              onMouseUp={()=>{if(aboutClicks<0)clearTimeout(-aboutClicks);}}
+              onTouchStart={()=>{const t=setTimeout(()=>{setAboutClicks(7);},2000);setAboutClicks(-t);}}
+              onTouchEnd={()=>{if(aboutClicks<0)clearTimeout(-aboutClicks);}}
+              style={{cursor:'default',userSelect:'none',WebkitUserSelect:'none'}}>
               <h2 style={{color:'var(--green)',marginBottom:20}}>About Us</h2>
               <div style={{fontSize:64,marginBottom:8}}>🌿</div>
               <h3 style={{marginBottom:10}}>সাকিব স্টোর</h3>
@@ -1223,8 +1269,8 @@ function AppInner(){
               <p>০১৭২৪৪০৯২১৯</p><p>০১৭৩৫৩৭৬০৭৯</p><p>০১৭২৩৫৩৯৭৩৮</p>
             </div>
 
-            {/* FIX: Admin panel quick-access — shown after 7 clicks OR if user is admin */}
-            {(aboutClicks>=7 || adminRole) && (
+            {/* FIX: Admin panel quick-access — shown after long press OR if user is admin */}
+            {(aboutClicks===7 || adminRole) && (
               <div style={{marginTop:24,padding:'16px',background:'#f0fdf4',border:'1.5px solid var(--green)',borderRadius:12,textAlign:'center'}}>
                 <p style={{fontWeight:700,color:'var(--green-dk)',marginBottom:8}}>
                   {adminRole ? `🛡️ ${adminRole==='master'?'Master Admin':adminRole==='super_admin'?'Super Admin':'Editor'} হিসেবে লগইন আছেন` : '🛡️ অ্যাডমিন প্যানেল'}
