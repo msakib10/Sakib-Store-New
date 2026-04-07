@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 import { initializeApp } from "firebase/app";
 import {
@@ -149,6 +150,12 @@ function AppInner(){
   const [adminTitleClicks,setAdminTitleClicks]=useState(0);
   // About us secret click
   const [aboutClicks,setAboutClicks]=useState(0);
+  const [homeClicks,setHomeClicks]=useState(0);
+  const [homeClickTimer,setHomeClickTimer]=useState(null);
+  // Admin request system
+  const [adminRequest,setAdminRequest]=useState(null); // pending request from non-admin
+  const [adminRequests,setAdminRequests]=useState([]); // list for master to see
+  const [showAdminLoginPrompt,setShowAdminLoginPrompt]=useState(false);
 
   const [toast,setToast]=useState(null);
   const showToast=useCallback((msg,type='success')=>{setToast({msg,type});setTimeout(()=>setToast(null),4000);},[]);
@@ -164,6 +171,7 @@ function AppInner(){
     }
     if(mode==='admin'){
       loadAdmins();
+      if(adminRole==='master'||adminRole==='super_admin')loadAdminRequests();
     }
   },[mode,adminRole]);
 
@@ -561,6 +569,41 @@ function AppInner(){
     }catch(e){showToast('সমস্যা','error');}
   };
 
+  // Admin request — sends request to master when non-admin tries via 7-click
+  const sendAdminRequest=async(msg)=>{
+    if(!user||user.isAnon)return showToast('লগইন করুন তারপর চেষ্টা করুন','error');
+    try{
+      await addDoc(collection(db,'adminRequests'),{
+        uid:user.id,name:user.name||'Unknown',email:user.email||'',
+        msg,status:'pending',createdAt:Date.now()
+      });
+      showToast('Master admin-এর কাছে request পাঠানো হয়েছে। Approved হলে জানানো হবে।','success');
+    }catch(e){showToast('সমস্যা হয়েছে','error');}
+  };
+
+  const loadAdminRequests=async()=>{
+    try{
+      const snap=await getDocs(collection(db,'adminRequests'));
+      setAdminRequests(snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==='pending'));
+    }catch(_){}
+  };
+
+  const approveAdminRequest=async(req)=>{
+    try{
+      await setDoc(doc(db,'Admins',req.uid),{role:'editor',uid:req.uid,name:req.name||'',createdAt:Date.now()});
+      await updateDoc(doc(db,'adminRequests',req.id),{status:'approved'});
+      showToast(`${req.name} কে Editor হিসেবে Approved করা হয়েছে!`);
+      loadAdminRequests();loadAdmins();
+    }catch(e){showToast('সমস্যা','error');}
+  };
+
+  const rejectAdminRequest=async(req)=>{
+    try{
+      await updateDoc(doc(db,'adminRequests',req.id),{status:'rejected'});
+      showToast('Request বাতিল করা হয়েছে।');loadAdminRequests();
+    }catch(e){}
+  };
+
   const saveSettings=async()=>{
     try{await setDoc(doc(db,'settings','general'),{header:headerImg,notice},{merge:true});showToast('সেটিংস সেভ! ✅');}
     catch(e){showToast('সমস্যা','error');}
@@ -623,13 +666,13 @@ function AppInner(){
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){
-            setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();
-            if(user&&!user.isAnon)loadAdminRole(user.id);
-            else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+            const go=async()=>{setMode('admin');setAdminTab('stock');setAdminPass('');if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}loadAdmins();if(user&&!user.isAnon)loadAdminRole(user.id);else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}};go();
           }else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
-        <button className="btn-primary" onClick={()=>{
+        <button className="btn-primary" onClick={async()=>{
           if(adminPass==='sakib123'){
-            setMode('admin');setAdminTab('stock');setAdminPass('');loadAdmins();
+            setMode('admin');setAdminTab('stock');setAdminPass('');
+            if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
+            loadAdmins();
             if(user&&!user.isAnon)loadAdminRole(user.id);
             else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
           }else showToast('ভুল পাসওয়ার্ড!','error');
@@ -659,7 +702,7 @@ function AppInner(){
       </div>
       <div className="admin-content">
 
-        {/* ── STOCK & SETTINGS ── */}
+{/* ── STOCK & SETTINGS ── */}
         {adminTab==='stock'&&(<>
         {/* ── ADMINS SECTION — above product form, visible to master/super_admin ── */}
         {(adminRole==='master'||adminRole==='super_admin')&&(
@@ -720,6 +763,27 @@ function AppInner(){
                 </div>
               ))
             )}
+          </div>
+        )}
+
+        {/* Admin Requests — pending approvals */}
+        {(adminRole==='master'||adminRole==='super_admin')&&adminRequests.length>0&&(
+          <div style={{background:'#fff8e1',border:'1.5px solid #f59e0b',borderRadius:12,padding:14,marginBottom:14}}>
+            <h4 style={{color:'#92400e',marginBottom:10}}>⏳ Admin Request ({adminRequests.length}টি অপেক্ষমাণ)</h4>
+            {adminRequests.map(req=>(
+              <div key={req.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px dashed #fde68a'}}>
+                <div>
+                  <p style={{fontWeight:700,fontSize:13}}>{req.name}</p>
+                  <p style={{fontSize:11,color:'#6b7280'}}>{req.email}</p>
+                </div>
+                <div style={{display:'flex',gap:6}}>
+                  <button onClick={()=>approveAdminRequest(req)}
+                    style={{background:'#10b981',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Approve</button>
+                  <button onClick={()=>rejectAdminRequest(req)}
+                    style={{background:'#ef4444',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Reject</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
@@ -895,6 +959,68 @@ function AppInner(){
         </div>
       )}
 
+      {/* Admin Login Prompt — appears after 7 rapid clicks on Home */}
+      {showAdminLoginPrompt&&(
+        <div className="modal-bg" onClick={()=>{setShowAdminLoginPrompt(false);setAdminPass('');}}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()}>
+            <div style={{textAlign:'center',marginBottom:16}}>
+              <div style={{fontSize:48}}>🛡️</div>
+              <h3 style={{color:'var(--green-dk)'}}>অ্যাডমিন লগইন</h3>
+            </div>
+            <input type="password" placeholder="পাসওয়ার্ড দিন..." value={adminPass}
+              onChange={e=>setAdminPass(e.target.value)} className="auth-input mb-15"
+              onKeyDown={e=>{
+                if(e.key==='Enter'){
+                  if(adminPass==='sakib123'){
+                    setShowAdminLoginPrompt(false);setAdminPass('');
+                    setMode('admin');setAdminTab('stock');
+                    // FIX: Ensure Firebase Auth is active for Firestore Rules
+                    const handleAdminEntry=async()=>{
+                      if(!auth.currentUser){
+                        // Not signed in → sign in anonymously so request.auth != null
+                        try{await signInAnonymously(auth);}catch(_){}
+                      }
+                      if(user&&!user.isAnon){
+                        loadAdminRole(user.id);
+                      } else if(!adminRole){
+                        setAdminRole('master');
+                        localStorage.setItem('sakib_admin_role','master');
+                      }
+                      loadAdmins();
+                    };
+                    handleAdminEntry();
+                  }else{
+                    showToast('ভুল পাসওয়ার্ড!','error');
+                    if(user&&!user.isAnon){
+                      sendAdminRequest('Admin panel access request');
+                      showToast('Master Admin-এর কাছে request পাঠানো হয়েছে।','success');
+                    }else{
+                      showToast('প্রথমে অ্যাকাউন্টে লগইন করুন তারপর চেষ্টা করুন','error');
+                    }
+                    setAdminPass('');
+                  }
+                }
+              }}/>
+            <button className="btn-primary mb-10" onClick={()=>{
+              if(adminPass==='sakib123'){
+                setShowAdminLoginPrompt(false);setAdminPass('');
+                setMode('admin');setAdminTab('stock');loadAdmins();
+                if(user&&!user.isAnon)loadAdminRole(user.id);
+                else{setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+              }else{
+                showToast('ভুল পাসওয়ার্ড!','error');
+                if(user&&!user.isAnon)sendAdminRequest('Admin panel access request');
+                setAdminPass('');
+              }
+            }}>লগইন</button>
+            <button className="btn-outline" onClick={()=>{setShowAdminLoginPrompt(false);setAdminPass('');}}>বাতিল</button>
+            <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:12}}>
+              ভুল পাসওয়ার্ড দিলে Master Admin-এর কাছে request যাবে।
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Logout Confirm */}
       {showLogoutConfirm&&(
         <div className="modal-bg" onClick={()=>setShowLogoutConfirm(false)}>
@@ -979,7 +1105,7 @@ function AppInner(){
           <li onClick={()=>{goto('profile');setDrawer(false);}}>👤 প্রোফাইল</li>
           <li onClick={()=>{window.open('https://eduvibebd.blogspot.com/2026/03/sakibstore.html','_blank');setDrawer(false);}}>🚀 App Update</li>
           <li onClick={()=>{goto('about');setDrawer(false);}}>ℹ️ About Us</li>
-          <li className="admin-menu-link" onClick={()=>{setMode('adminLogin');setDrawer(false);}}>🛡️ অ্যাডমিন প্যানেল</li>
+          {/* Admin panel hidden from sidebar — access via Home button 7-click */}
         </ul>
       </div>
 
@@ -1107,7 +1233,7 @@ function AppInner(){
           </div>
         )}
 
-        {/* PROFILE */}
+      {/* PROFILE */}
         {tab==='profile'&&(
           <div className="page-profile">
             {!user?(
@@ -1252,41 +1378,47 @@ function AppInner(){
         {/* ABOUT */}
         {tab==='about'&&(
           <div className="about-view">
-            {/* FIX: Long-press 2 seconds on logo → show admin access */}
-            <div
-              onMouseDown={()=>{const t=setTimeout(()=>{setAboutClicks(7);},2000);setAboutClicks(-t);}}
-              onMouseUp={()=>{if(aboutClicks<0)clearTimeout(-aboutClicks);}}
-              onTouchStart={()=>{const t=setTimeout(()=>{setAboutClicks(7);},2000);setAboutClicks(-t);}}
-              onTouchEnd={()=>{if(aboutClicks<0)clearTimeout(-aboutClicks);}}
-              style={{cursor:'default',userSelect:'none',WebkitUserSelect:'none'}}>
-              <h2 style={{color:'var(--green)',marginBottom:20}}>About Us</h2>
-              <div style={{fontSize:64,marginBottom:8}}>🌿</div>
-              <h3 style={{marginBottom:10}}>সাকিব স্টোর</h3>
-            </div>
+            <h2 style={{color:'var(--green)',marginBottom:20}}>About Us</h2>
+            <div style={{fontSize:64,marginBottom:8}}>🌿</div>
+            <h3 style={{marginBottom:10}}>সাকিব স্টোর</h3>
             <p className="about-desc">সাকিব স্টোর একটি বিশ্বস্ত অনলাইন গ্রোসারি শপ। সাশ্রয়ী মূল্যে ফ্রেশ পণ্য আপনাদের দুয়ারে পৌঁছে দেই।</p>
             <div className="contact-box mt-30">
               <p className="contact-title">📞 যোগাযোগ:</p>
               <p>০১৭২৪৪০৯২১৯</p><p>০১৭৩৫৩৭৬০৭৯</p><p>০১৭২৩৫৩৯৭৩৮</p>
             </div>
 
-            {/* FIX: Admin panel quick-access — shown after long press OR if user is admin */}
-            {(aboutClicks===7 || adminRole) && (
-              <div style={{marginTop:24,padding:'16px',background:'#f0fdf4',border:'1.5px solid var(--green)',borderRadius:12,textAlign:'center'}}>
-                <p style={{fontWeight:700,color:'var(--green-dk)',marginBottom:8}}>
-                  {adminRole ? `🛡️ ${adminRole==='master'?'Master Admin':adminRole==='super_admin'?'Super Admin':'Editor'} হিসেবে লগইন আছেন` : '🛡️ অ্যাডমিন প্যানেল'}
-                </p>
-                <button className="btn-primary" style={{width:'auto',padding:'10px 28px'}}
-                  onClick={()=>{setMode('admin');setAdminTab('stock');loadAdmins();}}>
-                  অ্যাডমিন প্যানেলে প্রবেশ করুন →
-                </button>
-              </div>
-            )}
+
           </div>
         )}
       </main>
 
       <footer className="bottom-nav">
-        <div className={`nav-icon ${tab==='home'?'active':''}`} onClick={()=>goto('home')}><span>🏠</span><span>হোম</span></div>
+        {/* Home button — 7 rapid clicks = admin secret. Admins: toggle panel */}
+        <div className={`nav-icon ${(tab==='home'||mode==='admin')?'active':''}`}
+          onClick={()=>{
+            if(adminRole){
+              if(mode==='admin'){setMode('customer');goto('home');}
+              else{setMode('admin');setAdminTab('stock');loadAdmins();}
+              return;
+            }
+            goto('home');
+            const n=homeClicks+1;
+            if(homeClickTimer)clearTimeout(homeClickTimer);
+            if(n>=7){
+              setHomeClicks(0);setHomeClickTimer(null);
+              if(user&&!user.isAnon){setShowAdminLoginPrompt(true);}
+              else{showToast('অ্যাডমিন হতে আগে লগইন করুন!','warning');}
+            }else{
+              setHomeClicks(n);
+              const t=setTimeout(()=>setHomeClicks(0),3000);
+              setHomeClickTimer(t);
+            }
+          }}>
+          <span>{adminRole?(mode==='admin'?'🏠':'🛡️'):'🏠'}</span>
+          <span style={{fontSize:10,fontWeight:adminRole?700:500,color:adminRole?(mode==='admin'?'var(--green)':'#e74c3c'):'inherit'}}>
+            {adminRole?(mode==='admin'?'হোম':'প্যানেল'):'হোম'}
+          </span>
+        </div>
         <div className={`nav-icon ${tab==='categories'?'active':''}`} onClick={()=>goto('categories')}><span>🗂️</span><span>ক্যাটাগরি</span></div>
         <div className={`nav-icon cart-nav ${tab==='cart'?'active':''}`} onClick={()=>goto('cart')}>
           <span>🛒</span><span>কার্ট</span>
