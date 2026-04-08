@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef, useCallback, Component } from 'reac
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, getDocs, addDoc, doc, updateDoc,
-  getDoc, setDoc, query, where, deleteDoc, onSnapshot
+  getDoc, setDoc, query, where, deleteDoc, onSnapshot, writeBatch
 } from "firebase/firestore";
 import {
-  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
+  getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInAnonymously, onAuthStateChanged, signOut, updateProfile,
   sendEmailVerification, sendPasswordResetEmail, linkWithPopup
@@ -33,7 +33,7 @@ class ErrorBoundary extends Component {
 // ─── Firebase ──────────────────────────────────────────────────────────────────
 const FB = initializeApp({
   apiKey:"AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
-  authDomain:"sakibstore.shop",
+  authDomain:"sakib-store1.firebaseapp.com",
   projectId:"sakib-store1",
   storageBucket:"sakib-store1.firebasestorage.app",
   messagingSenderId:"514373347826",
@@ -67,6 +67,7 @@ const STATUS_STYLE = {
   'Cancelled':   { bg:'#fef2f2', border:'#ef4444', color:'#7f1d1d', icon:'❌', label:'বাতিল' },
 };
 const getStatusStyle = s => STATUS_STYLE[s] || STATUS_STYLE['Pending'];
+const stCls=s=>({Pending:'st-pending',Confirmed:'st-confirmed','On Delivery':'st-delivery',Delivered:'st-delivered',Cancelled:'st-cancelled'}[s]||'st-pending');
 
 const safeDate=d=>{
   try{
@@ -81,6 +82,15 @@ const safeDate=d=>{
 const CACHE_KEY='sakib_products_cache';
 const saveProductsCache=p=>{try{localStorage.setItem(CACHE_KEY,JSON.stringify(p));}catch(_){}};
 const loadProductsCache=()=>{try{const d=localStorage.getItem(CACHE_KEY);return d?JSON.parse(d):[];}catch(_){return[];}};
+
+// ─── Guest ID helper ───────────────────────────────────────────────────────────
+const getOrCreateGuestId=()=>{
+  try{
+    let gid=localStorage.getItem('sakib_guest_id');
+    if(!gid){gid='Guest_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);localStorage.setItem('sakib_guest_id',gid);}
+    return gid;
+  }catch(_){return 'Guest_'+Date.now();}
+};
 
 // ─── Main App ──────────────────────────────────────────────────────────────────
 function AppInner(){
@@ -110,6 +120,7 @@ function AppInner(){
   const [info,setInfo]=useState({...DEFINFO});
   const [expandedOrder,setExpandedOrder]=useState(null);
 
+  // Auth states
   const [authMode,setAuthMode]=useState('choice');
   const [emailInput,setEmailInput]=useState('');
   const [passInput,setPassInput]=useState('');
@@ -117,13 +128,22 @@ function AppInner(){
   const [authLoading,setAuthLoading]=useState(false);
   const [verifyBanner,setVerifyBanner]=useState(null);
   const [checkingVerify,setCheckingVerify]=useState(false);
+  // Password visibility
+  const [showPass,setShowPass]=useState(false);
+  const [showPass2,setShowPass2]=useState(false);
+  // Guest order transfer
+  const [showTransferModal,setShowTransferModal]=useState(false);
+  const [pendingLoginFn,setPendingLoginFn]=useState(null);
+  const guestId=getOrCreateGuestId();
 
+  // Admin states
   const [adminPass,setAdminPass]=useState('');
   const [allOrders,setAllOrders]=useState([]);
   const [adminLoading,setAdminLoading]=useState(false);
   const [adminErr,setAdminErr]=useState('');
   const [adminFilter,setAdminFilter]=useState('All');
-  const [adminTab,setAdminTab]=useState('stock');
+  const [adminTab,setAdminTab]=useState('orders');
+  const [adminStockTab,setAdminStockTab]=useState('settings'); // settings=বামে, stock=ডানে
   const [editId,setEditId]=useState(null);
   const [newP,setNewP]=useState({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});
   const [newNotif,setNewNotif]=useState({text:'',durationMins:60});
@@ -140,7 +160,6 @@ function AppInner(){
   const [newAdminUid,setNewAdminUid]=useState('');
   const [newAdminRole,setNewAdminRole]=useState('editor');
   const [adminTitleClicks,setAdminTitleClicks]=useState(0);
-  
   const [homeClicks,setHomeClicks]=useState(0);
   const [homeClickTimer,setHomeClickTimer]=useState(null);
   const [adminRequests,setAdminRequests]=useState([]);
@@ -151,57 +170,41 @@ function AppInner(){
   const backTime=useRef(0);
   const orderUnsubRef=useRef(null);
 
-  // Auto-redirect to admin panel if user is already admin
   useEffect(()=>{
     if(mode==='adminLogin'&&adminRole){
-      setMode('admin');setAdminTab('stock');
-      loadAdmins();
+      setMode('admin');setAdminTab('orders');loadAdmins();
     }
     if(mode==='admin'){
-      loadAdmins();
-      if(adminRole==='master'||adminRole==='super_admin')loadAdminRequests();
+      loadAdmins();fetchOrders();
+      if(adminRole==='master'||adminRole==='super_admin'){loadAdminRequests();loadLoginRequests();}
     }
   },[mode,adminRole]);
 
+  // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(()=>{
     loadProducts();
     loadSettings();
     loadAdmins();
 
-    getRedirectResult(auth)
-      .then(result=>{
-        if(result?.user){
-          showToast('গুগল লগইন সফল! ✅');
-        }
-      })
-      .catch(e=>{
-        const code=e?.code||'';
-        if(code==='auth/unauthorized-domain'){
-          showToast('Firebase Authorized Domains-এ sakibstore.shop যোগ করুন','error');
-        }else if(code && code!=='auth/no-auth-event'){
-          console.error('Redirect result error:',code);
-        }
-      });
-
     const unsub=onAuthStateChanged(auth,cu=>{
       try{
         if(cu){
-          setUser({id:cu.uid,isAnon:cu.isAnonymous,email:cu.email,name:cu.displayName,emailVerified:cu.emailVerified});
-          loadUserData(cu.uid);
-          subscribeToUserOrders(cu.uid);
-          if(!cu.isAnonymous && !cu.emailVerified && cu.email){
-            setVerifyBanner({
-              msg:`📧 আপনার ইমেইল (${cu.email}) ভেরিফাই করুন। Spam ফোল্ডারও চেক করুন।`,
-              type:'warn'
-            });
-          } else {
-            setVerifyBanner(null);
+          if(cu.isAnonymous){
+            // Guest user - load their orders by guestId
+            setUser({id:cu.uid,isAnon:true,email:null,name:null,emailVerified:false,guestId});
+            subscribeToGuestOrders(guestId);
+            try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
+          }else{
+            setUser({id:cu.uid,isAnon:false,email:cu.email,name:cu.displayName,emailVerified:cu.emailVerified});
+            loadUserData(cu.uid);
+            subscribeToUserOrders(cu.uid);
+            if(!cu.emailVerified&&cu.email){
+              setVerifyBanner({msg:`📧 আপনার ইমেইল (${cu.email}) ভেরিফাই করুন। Spam ফোল্ডারও চেক করুন।`,type:'warn'});
+            }else{setVerifyBanner(null);}
           }
         }else{
-          setUser(null);
-          setVerifyBanner(null);
+          setUser(null);setVerifyBanner(null);setApprovalStatus(null);
           if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
-          try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
         }
       }catch(e){console.error('auth state:',e);}
       setAppReady(true);
@@ -221,32 +224,36 @@ function AppInner(){
     };
     window.addEventListener('popstate',onPop);
     return()=>{try{unsub();}catch(_){}if(orderUnsubRef.current)orderUnsubRef.current();window.removeEventListener('popstate',onPop);};
+  // eslint-disable-next-line
   },[]);
 
   const goto=t=>{setTab(t);setTabHist(p=>[...p,t]);window.scrollTo(0,0);};
-
-  // অ্যাডমিন থেকে হোমে ফেরার ফাংশন (হিস্ট্রি ক্লিয়ার করে)
-  const exitAdmin = () => {
-    setMode('customer');
-    setTabHist(['home']);
-    setTab('home');
-    window.scrollTo(0, 0);
-  };
 
   const subscribeToUserOrders=uid=>{
     if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
     try{
       const q=query(collection(db,'orders'),where('userId','==',uid));
       orderUnsubRef.current=onSnapshot(q,snap=>{
-        const orders=snap.docs.map(d=>{
-          const data=d.data();
-          return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};
-        }).sort((a,b)=>(b.timestamp?.seconds||b.timestamp||0)-(a.timestamp?.seconds||a.timestamp||0));
+        const orders=snap.docs.map(d=>{const data=d.data();return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};})
+          .sort((a,b)=>(b.timestamp?.seconds||b.timestamp||0)-(a.timestamp?.seconds||a.timestamp||0));
         setUserOrders(orders);
       },err=>console.error('order snapshot:',err));
     }catch(e){console.error('subscribeToUserOrders:',e);}
   };
 
+  const subscribeToGuestOrders=gid=>{
+    if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
+    try{
+      const q=query(collection(db,'orders'),where('userId','==',gid));
+      orderUnsubRef.current=onSnapshot(q,snap=>{
+        const orders=snap.docs.map(d=>{const data=d.data();return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};})
+          .sort((a,b)=>(b.timestamp?.seconds||b.timestamp||0)-(a.timestamp?.seconds||a.timestamp||0));
+        setUserOrders(orders);
+      },err=>console.error('guest order snapshot:',err));
+    }catch(e){}
+  };
+
+  // ── Data ──────────────────────────────────────────────────────────────────────
   const loadProducts=async()=>{
     try{
       const s=await getDocs(collection(db,'products'));
@@ -268,18 +275,14 @@ function AppInner(){
         const now=Date.now();
         if(Array.isArray(d.notifications)){setNotifications(d.notifications.filter(n=>now<=n.expiresAt));}
         else if(d.notification&&now<=d.notification.expiresAt){setNotifications([d.notification]);}
-        if(Array.isArray(d.coverPhotos)&&d.coverPhotos.length>0){
-          setCoverPhotos(d.coverPhotos);
-        }
+        if(Array.isArray(d.coverPhotos)&&d.coverPhotos.length>0){setCoverPhotos(d.coverPhotos);}
       }
     }catch(e){console.error('loadSettings',e);}
   };
 
   const loadAdmins=async()=>{
-    try{
-      const snap=await getDocs(collection(db,'Admins'));
-      setAdminsList(snap.docs.map(d=>({id:d.id,...d.data()})));
-    }catch(e){console.error('loadAdmins',e);}
+    try{const snap=await getDocs(collection(db,'Admins'));setAdminsList(snap.docs.map(d=>({id:d.id,...d.data()})));}
+    catch(e){console.error('loadAdmins',e);}
   };
 
   const loadAdminRole=async(uid)=>{
@@ -288,15 +291,8 @@ function AppInner(){
       if(d.exists()){
         const role=d.data().role||null;
         setAdminRole(role);
-        if(role){
-          localStorage.setItem('sakib_admin_role',role);
-          localStorage.setItem('sakib_admin_uid',uid);
-        }
-      }else{
-        setAdminRole(null);
-        localStorage.removeItem('sakib_admin_role');
-        localStorage.removeItem('sakib_admin_uid');
-      }
+        if(role){localStorage.setItem('sakib_admin_role',role);localStorage.setItem('sakib_admin_uid',uid);}
+      }else{setAdminRole(null);localStorage.removeItem('sakib_admin_role');localStorage.removeItem('sakib_admin_uid');}
     }catch(_){setAdminRole(null);}
   };
 
@@ -329,22 +325,116 @@ function AppInner(){
     }catch(e){console.error('loadUserData',e);}
   };
 
+  // ── Login Approval System ──────────────────────────────────────────────────────
+  // Check if user is approved to access the app
+  const checkUserApproval=async(uid,email,name)=>{
+    try{
+      const d=await getDoc(doc(db,'userApprovals',uid));
+      if(d.exists()){
+        const status=d.data().status;
+        if(status==='approved'){setApprovalStatus('approved');return true;}
+        if(status==='rejected'){
+          await signOut(auth);
+          setApprovalStatus('rejected');
+          showToast('আপনার প্রবেশ অনুমতি বাতিল করা হয়েছে।','error');
+          return false;
+        }
+        // pending
+        await signOut(auth);
+        setApprovalStatus('pending');
+        showToast('আপনার অনুরোধ অপেক্ষমাণ। Admin অনুমোদন করলে ঢুকতে পারবেন।','warning');
+        return false;
+      }else{
+        // First time — create pending request
+        await setDoc(doc(db,'userApprovals',uid),{
+          uid,email:email||'',name:name||'',status:'pending',createdAt:Date.now()
+        });
+        await signOut(auth);
+        setApprovalStatus('pending');
+        showToast('আপনার লগইন অনুরোধ পাঠানো হয়েছে। Admin অনুমোদন করলে জানানো হবে।','warning');
+        return false;
+      }
+    }catch(e){
+      console.error('approval check:',e);
+      // On error, allow access (don't block)
+      setApprovalStatus('approved');
+      return true;
+    }
+  };
+
+  const loadLoginRequests=async()=>{
+    try{
+      const snap=await getDocs(collection(db,'userApprovals'));
+      setLoginRequests(snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.status==='pending'));
+    }catch(_){}
+  };
+
+  const approveLoginRequest=async(req)=>{
+    try{
+      await updateDoc(doc(db,'userApprovals',req.id),{status:'approved',approvedAt:Date.now()});
+      showToast(`${req.name||req.email} কে অনুমোদন দেওয়া হয়েছে! ✅`);
+      loadLoginRequests();
+    }catch(e){showToast('সমস্যা','error');}
+  };
+
+  const rejectLoginRequest=async(req)=>{
+    try{
+      await updateDoc(doc(db,'userApprovals',req.id),{status:'rejected'});
+      showToast('অনুরোধ বাতিল করা হয়েছে।');
+      loadLoginRequests();
+    }catch(e){}
+  };
+
   // ── Auth ──────────────────────────────────────────────────────────────────────
+  // Check if guest has orders before logging in
+  const hasGuestOrders=async()=>{
+    try{
+      const q=query(collection(db,'orders'),where('userId','==',guestId));
+      const snap=await getDocs(q);
+      return snap.docs.length>0;
+    }catch(_){return false;}
+  };
+
+  // Transfer guest orders to logged-in user
+  const transferGuestOrders=async(newUid)=>{
+    try{
+      const q=query(collection(db,'orders'),where('userId','==',guestId));
+      const snap=await getDocs(q);
+      const batch=writeBatch(db);
+      snap.docs.forEach(d=>{batch.update(d.ref,{userId:newUid,transferredFromGuest:guestId});});
+      await batch.commit();
+      localStorage.removeItem('sakib_guest_id');
+      showToast('আপনার গেস্ট অর্ডার স্থানান্তর হয়েছে! ✅');
+    }catch(e){showToast('অর্ডার স্থানান্তরে সমস্যা','error');}
+  };
+
+  const doLoginAfterTransferCheck=async(loginFn)=>{
+    const hasOrders=await hasGuestOrders();
+    if(hasOrders&&user?.isAnon){
+      setPendingLoginFn(()=>loginFn);
+      setShowTransferModal(true);
+    }else{
+      await loginFn();
+    }
+  };
+
   const googleLogin=async()=>{
     setAuthLoading(true);
     try{
-      await signInWithRedirect(auth, gp);
+      const r=await signInWithPopup(auth,gp);
+      if(r?.user){
+        showToast('গুগল লগইন সফল! ✅');
+        setAuthMode('choice');goto('home');
+      }
     }catch(e){
       const code=e?.code||'';
-      if(code==='auth/unauthorized-domain'){
-        showToast('Firebase Authorized Domains-এ sakibstore.shop যোগ করুন','error');
-      }else if(code==='auth/network-request-failed'){
-        showToast('ইন্টারনেট সংযোগ নেই।','error');
-      }else{
-        showToast('লগইন সমস্যা: '+code,'error');
-      }
-      setAuthLoading(false);
+      if(code==='auth/unauthorized-domain')showToast('Firebase Authorized Domains-এ domain যোগ করুন','error');
+      else if(code==='auth/popup-blocked')showToast('Popup block হয়েছে। Browser-এ allow করুন।','error');
+      else if(code==='auth/cancelled-popup-request'||code==='auth/popup-closed-by-user'){}
+      else if(code==='auth/network-request-failed')showToast('ইন্টারনেট সংযোগ নেই।','error');
+      else showToast('লগইন সমস্যা: '+code,'error');
     }
+    setAuthLoading(false);
   };
 
   const emailLogin=async()=>{
@@ -354,10 +444,7 @@ function AppInner(){
       const r=await signInWithEmailAndPassword(auth,emailInput,passInput);
       if(!r.user.emailVerified){
         await signOut(auth);
-        setVerifyBanner({
-          msg:`📧 ইমেইল ভেরিফাই করুন! ${emailInput} ইনবক্স ও Spam ফোল্ডার চেক করুন। লিংকে ক্লিক করে ভেরিফাই করলে পরেরবার লগইন করতে পারবেন।`,
-          type:'warn'
-        });
+        setVerifyBanner({msg:`📧 ইমেইল ভেরিফাই করুন! ${emailInput} ইনবক্স ও Spam ফোল্ডার চেক করুন।`,type:'warn'});
         showToast('ইমেইল ভেরিফাই করুন!','error');
       }else{
         setVerifyBanner(null);
@@ -366,24 +453,10 @@ function AppInner(){
     }catch(e){
       if(e.code==='auth/user-not-found'||e.code==='auth/invalid-credential'||e.code==='auth/wrong-password'){
         showToast('ইমেইল বা পাসওয়ার্ড ভুল।','error');
-      }else if(e.code==='auth/invalid-email'){
-        showToast('সঠিক ইমেইল ঠিকানা দিন।','error');
-      }else{
-        showToast('সমস্যা: '+e.code,'error');
-      }
+      }else if(e.code==='auth/invalid-email'){showToast('সঠিক ইমেইল ঠিকানা দিন।','error');}
+      else{showToast('সমস্যা: '+e.code,'error');}
     }
     setAuthLoading(false);
-  };
-
-  // পাসওয়ার্ড রিসেট ফাংশন
-  const resetPassword = async () => {
-    if(!emailInput) return showToast('পাসওয়ার্ড রিসেট করতে আগে ইমেইল বক্সটি পূরণ করুন!', 'error');
-    try {
-      await sendPasswordResetEmail(auth, emailInput);
-      showToast('আপনার ইমেইলে পাসওয়ার্ড পরিবর্তনের লিংক পাঠানো হয়েছে! Spam ফোল্ডারও চেক করুন।');
-    } catch(e) {
-      showToast('সমস্যা: ' + e.message, 'error');
-    }
   };
 
   const emailRegister=async()=>{
@@ -399,7 +472,7 @@ function AppInner(){
       await signOut(auth);
       setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');
       setVerifyBanner({
-        msg:`✅ অ্যাকাউন্ট তৈরি হয়েছে! এখন ${emailInput} ইনবক্স খুলুন — "Verify your email" বিষয়ক ইমেইল দেখুন (Spam ফোল্ডারও চেক করুন)। ভেরিফাই করার পর লগইন করুন।`,
+        msg:`✅ অ্যাকাউন্ট তৈরি হয়েছে! এখন ${emailInput} ইনবক্স খুলুন — "Verify your email" ইমেইল দেখুন (Spam ফোল্ডারও চেক করুন)। ভেরিফাই করার পর লগইন করুন।`,
         type:'info'
       });
     }catch(e){
@@ -410,26 +483,52 @@ function AppInner(){
     setAuthLoading(false);
   };
 
+  const forgotPassword=async()=>{
+    if(!emailInput)return showToast('আপনার ইমেইল দিন!','error');
+    setAuthLoading(true);
+    try{
+      await sendPasswordResetEmail(auth,emailInput);
+      showToast('পাসওয়ার্ড রিসেট ইমেইল পাঠানো হয়েছে। Spam ফোল্ডারও চেক করুন।','success');
+      setAuthMode('email-login');
+    }catch(e){
+      if(e.code==='auth/user-not-found')showToast('এই ইমেইলে কোনো অ্যাকাউন্ট নেই।','error');
+      else showToast('সমস্যা: '+e.code,'error');
+    }
+    setAuthLoading(false);
+  };
+
+  const resendVerification=async()=>{
+    setCheckingVerify(true);
+    try{
+      const r=await signInWithEmailAndPassword(auth,emailInput,passInput);
+      if(!r.user.emailVerified){await sendEmailVerification(r.user);await signOut(auth);showToast('ভেরিফিকেশন ইমেইল পাঠানো হয়েছে।','success');}
+    }catch(_){showToast('আবার পাঠাতে পারিনি। একটু পরে চেষ্টা করুন।','error');}
+    setCheckingVerify(false);
+  };
+
   const guestLogin=async()=>{
     try{await signInAnonymously(auth);showToast('গেস্ট হিসেবে প্রবেশ করেছেন!');}
     catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
 
-  // গেস্ট আইডি গুগল অ্যাকাউন্টের সাথে লিঙ্ক করা
-  const linkGuestToGoogle = async () => {
-    if(window.confirm('আপনার বর্তমান গেস্ট অর্ডারের তথ্য কি নতুন গুগল অ্যাকাউন্টে যুক্ত করতে চান?')) {
-      try {
-        await linkWithPopup(auth.currentUser, gp);
-        showToast('আপনার সব ডেটা সফলভাবে ট্রান্সফার হয়েছে! ✅');
-        loadUserData(auth.currentUser.uid); 
-      } catch(e) {
-        if(e.code === 'auth/credential-already-in-use') {
-           showToast('এই জিমেইল দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট আছে। দয়া করে রেগুলার লগইন করুন।', 'error');
-        } else {
-           showToast('সমস্যা: ' + e.message, 'error');
+  // Link guest to Google
+  const linkGuestToGoogle=async()=>{
+    try{
+      setAuthLoading(true);
+      const r=await linkWithPopup(auth.currentUser,gp);
+      if(r?.user){
+        const approved=await checkUserApproval(r.user.uid,r.user.email,r.user.displayName);
+        if(approved){
+          await transferGuestOrders(r.user.uid);
+          showToast('Google অ্যাকাউন্টের সাথে যুক্ত হয়েছে! ✅');
+          subscribeToUserOrders(r.user.uid);
         }
       }
+    }catch(e){
+      if(e.code==='auth/popup-closed-by-user'){}
+      else showToast('সংযোগ সমস্যা: '+(e?.code||''),'error');
     }
+    setAuthLoading(false);
   };
 
   const confirmLogout=()=>setShowLogoutConfirm(true);
@@ -440,7 +539,8 @@ function AppInner(){
     setInfo({...DEFINFO});setCart([]);setUserOrders([]);
     localStorage.removeItem('guestInfo');
     clearAdminSession();
-    exitAdmin();
+    setMode('customer');
+    goto('home');
   };
 
   const saveProfile=async(data=info)=>{
@@ -479,10 +579,12 @@ function AppInner(){
     const loc=info.locationType==='নিজে লেখুন'?customLoc:info.locationType;
     if(info.locationType==='নিজে লেখুন'&&!customLoc)return showToast('জায়গার নাম লিখুন!','error');
     if((info.paymentMethod==='Bkash'||info.paymentMethod==='Nogod')&&(!info.senderNumber||!info.transactionId))return showToast('সেন্ডার নম্বর ও TrxID দিন!','error');
+    // Use guestId for anonymous users, actual uid for logged in
+    const userId=user?.isAnon?guestId:(user?.id||guestId);
     try{
       await addDoc(collection(db,'orders'),{
         items:cart,userInfo:{...info,finalLocation:loc},
-        userId:user?.id||'Guest_'+Date.now(),
+        userId,
         paymentMethod:info.paymentMethod,total:finalTotal,
         status:'Pending',
         date:new Date().toLocaleString('bn-BD'),
@@ -501,11 +603,7 @@ function AppInner(){
   const cancelOrder=async(orderId)=>{
     if(!window.confirm('অর্ডারটি বাতিল করতে চান? এটি স্থায়ীভাবে বাতিল হবে।'))return;
     try{
-      await updateDoc(doc(db,'orders',orderId),{
-        status:'Cancelled',
-        cancelledByCustomer:true, 
-        cancelledAt:Date.now()
-      });
+      await updateDoc(doc(db,'orders',orderId),{status:'Cancelled',cancelledByCustomer:true,cancelledAt:Date.now()});
       showToast('অর্ডার বাতিল করা হয়েছে।');
     }catch(e){showToast('বাতিল করতে সমস্যা হয়েছে।','error');}
   };
@@ -518,10 +616,8 @@ function AppInner(){
         getDocs(collection(db,'orders')),
         new Promise((_,r)=>setTimeout(()=>r(new Error('TIMEOUT')),10000))
       ]);
-      const orders=snap.docs.map(d=>{
-        const data=d.data();
-        return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};
-      }).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+      const orders=snap.docs.map(d=>{const data=d.data();return{id:d.id,...data,date:safeDate(data.date||data.timestamp)};})
+        .sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
       setAllOrders(orders);
     }catch(e){
       const code=String(e?.code||e?.message||'');
@@ -554,52 +650,12 @@ function AppInner(){
     }catch(e){showToast('সমস্যা','error');}
   };
 
-  // অ্যাডমিন লগইন চেকিং সিস্টেম (পাসওয়ার্ড + রিকোয়েস্ট)
-  const handleAdminLoginSubmit = async () => {
-    if(adminPass !== 'sakib123') {
-      showToast('ভুল পাসওয়ার্ড!', 'error');
-      return;
-    }
-    if(!user || user.isAnon) {
-      showToast('অ্যাডমিন প্যানেলে ঢুকতে আগে প্রোফাইল থেকে নিজের ইমেইল দিয়ে লগইন করুন!', 'error');
-      setShowAdminLoginPrompt(false); 
-      exitAdmin(); goto('profile');
-      return;
-    }
-    setAuthLoading(true);
-    try {
-      const adminDoc = await getDoc(doc(db, 'Admins', user.id));
-      if(adminDoc.exists()) {
-        const role = adminDoc.data().role;
-        setAdminRole(role);
-        localStorage.setItem('sakib_admin_role', role);
-        localStorage.setItem('sakib_admin_uid', user.id);
-        setShowAdminLoginPrompt(false); setAdminPass('');
-        setMode('admin'); setAdminTab('stock'); loadAdmins();
-      } else {
-        // যদি ডাটাবেজে কোনো অ্যাডমিনই না থাকে, তবে প্রথম জনকে Master বানিয়ে দিন
-        const allAdmins = await getDocs(collection(db, 'Admins'));
-        if(allAdmins.empty) {
-          await setDoc(doc(db, 'Admins', user.id), { role: 'master', uid: user.id, name: user.name || 'Master', createdAt: Date.now() });
-          setAdminRole('master');
-          localStorage.setItem('sakib_admin_role', 'master');
-          localStorage.setItem('sakib_admin_uid', user.id);
-          setShowAdminLoginPrompt(false); setAdminPass('');
-          setMode('admin'); setAdminTab('stock'); loadAdmins();
-        } else {
-          // রিকোয়েস্ট পাঠানো
-          await addDoc(collection(db, 'adminRequests'), {
-            uid: user.id, name: user.name || 'Unknown', email: user.email || '',
-            msg: 'Requested via correct password', status: 'pending', createdAt: Date.now()
-          });
-          showToast('সঠিক পাসওয়ার্ড! কিন্তু আপনার রিকুয়েষ্ট Master Admin-এর কাছে পাঠানো হয়েছে। Approve হলে ঢুকতে পারবেন।', 'warning');
-          setShowAdminLoginPrompt(false); setAdminPass('');
-        }
-      }
-    } catch(e) {
-      showToast('সমস্যা: ' + e.message, 'error');
-    }
-    setAuthLoading(false);
+  const sendAdminRequest=async(msg)=>{
+    if(!user||user.isAnon)return showToast('লগইন করুন তারপর চেষ্টা করুন','error');
+    try{
+      await addDoc(collection(db,'adminRequests'),{uid:user.id,name:user.name||'Unknown',email:user.email||'',msg,status:'pending',createdAt:Date.now()});
+      showToast('Master Admin-এর কাছে request পাঠানো হয়েছে।','success');
+    }catch(e){showToast('সমস্যা হয়েছে','error');}
   };
 
   const loadAdminRequests=async()=>{
@@ -619,10 +675,8 @@ function AppInner(){
   };
 
   const rejectAdminRequest=async(req)=>{
-    try{
-      await updateDoc(doc(db,'adminRequests',req.id),{status:'rejected'});
-      showToast('Request বাতিল করা হয়েছে।');loadAdminRequests();
-    }catch(e){}
+    try{await updateDoc(doc(db,'adminRequests',req.id),{status:'rejected'});showToast('Request বাতিল করা হয়েছে।');loadAdminRequests();}
+    catch(e){}
   };
 
   const saveSettings=async()=>{
@@ -677,7 +731,7 @@ function AppInner(){
     </div>
   );
 
-  // ══════ ADMIN LOGIN STANDALONE ══════
+  // ══════ ADMIN LOGIN ══════
   if(mode==='adminLogin')return(
     <div className="fullscreen-center">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
@@ -685,9 +739,19 @@ function AppInner(){
         <div style={{fontSize:56,marginBottom:12}}>🛡️</div>
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter') handleAdminLoginSubmit(); }}/>
-        <button className="btn-primary" onClick={handleAdminLoginSubmit}>লগইন</button>
-        <button className="btn-outline mt-10" onClick={exitAdmin}>← ফিরে যান</button>
+          onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){
+            const go=async()=>{setMode('admin');setAdminTab('orders');setAdminPass('');if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}loadAdmins();if(user&&!user.isAnon)loadAdminRole(user.id);else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}};go();
+          }else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
+        <button className="btn-primary" onClick={async()=>{
+          if(adminPass==='sakib123'){
+            setMode('admin');setAdminTab('orders');setAdminPass('');
+            if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
+            loadAdmins();
+            if(user&&!user.isAnon)loadAdminRole(user.id);
+            else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+          }else showToast('ভুল পাসওয়ার্ড!','error');
+        }}>লগইন</button>
+        <button className="btn-outline mt-10" onClick={()=>{setMode('customer');goto('home');}}>← ফিরে যান</button>
       </div>
     </div>
   );
@@ -697,164 +761,15 @@ function AppInner(){
     <div className="admin-wrapper">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       <header className="admin-header">
-        <button className="admin-back-btn" onClick={exitAdmin}>← বের হোন</button>
+        <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <button className="admin-back-btn" style={{marginLeft:'auto',background:'rgba(255,255,255,0.1)',fontSize:12}}
-          onClick={()=>{clearAdminSession(); exitAdmin(); showToast('Admin logout হয়েছে।');}}>
+          onClick={()=>{clearAdminSession();setMode('customer');goto('home');showToast('Admin logout হয়েছে।');}}>
           🚪 লগআউট
         </button>
-        <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
-        <span/>
       </header>
-      <div className="admin-tabs">
-        <button className={adminTab==='stock'?'active':''} onClick={()=>{setAdminTab('stock');loadAdmins();}}>📊 স্টক ও সেটিংস</button>
-        <button className={adminTab==='orders'?'active':''} onClick={()=>{setAdminTab('orders');fetchOrders();}}>📦 অর্ডারসমূহ</button>
-      </div>
+
       <div className="admin-content">
-
-        {adminTab==='stock'&&(<>
-        {(adminRole==='master'||adminRole==='super_admin')&&(
-          <div style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,padding:16,marginBottom:16}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-              <h3 style={{color:'var(--green-dk)',fontSize:15,fontWeight:700,cursor:'pointer',margin:0}}
-                onClick={()=>{
-                  if(adminRole!=='master'&&adminRole!=='super_admin')return;
-                  const n=adminTitleClicks+1;setAdminTitleClicks(n);
-                  if(n>=5){setAdminTitleClicks(0);setShowAddAdmin(true);}
-                }}>
-                👮 Admins <span style={{fontSize:11,color:'var(--muted)',fontWeight:400}}>({adminRole==='master'?'৫ বার ক্লিক = নতুন যোগ':''})</span>
-              </h3>
-              {adminRole==='master'&&(
-                <button className="btn-primary" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>{setShowAddAdmin(true);loadAdmins();}}>+ যোগ</button>
-              )}
-            </div>
-
-            {showAddAdmin&&(adminRole==='master'||adminRole==='super_admin')&&(
-              <div style={{background:'#f0fdf4',border:'1.5px solid var(--border)',borderRadius:10,padding:14,marginBottom:12}}>
-                <h4 style={{marginBottom:10,fontSize:13,color:'var(--green-dk)'}}>নতুন Admin যোগ করুন</h4>
-                <p style={{fontSize:11,color:'var(--muted)',marginBottom:8}}>Firebase Console → Authentication → Users থেকে UID কপি করুন।</p>
-                <input type="text" placeholder="Firebase User UID" value={newAdminUid} onChange={e=>setNewAdminUid(e.target.value)}
-                  style={{width:'100%',padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,marginBottom:8,outline:'none',background:'#fff',boxSizing:'border-box'}}/>
-                <select value={newAdminRole} onChange={e=>setNewAdminRole(e.target.value)}
-                  style={{width:'100%',padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,marginBottom:10,background:'#fff'}}>
-                  {adminRole==='master'&&<option value="super_admin">⭐ Super Admin</option>}
-                  <option value="editor">✏️ Editor</option>
-                </select>
-                <div style={{display:'flex',gap:8}}>
-                  <button className="btn-primary flex-1" onClick={addAdmin}>যোগ করুন</button>
-                  <button className="btn-danger" style={{padding:'10px 14px'}} onClick={()=>setShowAddAdmin(false)}>বাতিল</button>
-                </div>
-              </div>
-            )}
-
-            {adminsList.length===0?(
-              <p style={{color:'var(--muted)',fontSize:13,textAlign:'center',padding:'10px 0'}}>কোনো Admin নেই।</p>
-            ):(
-              adminsList.map(a=>(
-                <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #f0f0f0'}}>
-                  <div>
-                    <p style={{fontWeight:700,fontSize:13}}>{a.name||'UID: '+a.id.slice(0,10)+'...'}</p>
-                    <span style={{fontSize:11,fontWeight:700,background:a.role==='master'?'#1a7a43':a.role==='super_admin'?'#2980b9':'#6b7280',color:'#fff',padding:'1px 8px',borderRadius:10,display:'inline-block'}}>
-                      {a.role==='master'?'👑 Master':a.role==='super_admin'?'⭐ Super Admin':'✏️ Editor'}
-                      {a.id===user?.id&&' (আপনি)'}
-                    </span>
-                  </div>
-                  {(adminRole==='master'&&a.role!=='master'&&a.id!==user?.id)||(adminRole==='super_admin'&&a.role==='editor'&&a.id!==user?.id)?(
-                    <button onClick={()=>removeAdmin(a.id,a.role)}
-                      style={{background:'#fee2e2',color:'#dc2626',border:'none',padding:'5px 12px',borderRadius:8,fontFamily:'var(--font)',fontSize:12,fontWeight:700,cursor:'pointer'}}>
-                      সরান
-                    </button>
-                  ):null}
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {(adminRole==='master'||adminRole==='super_admin')&&adminRequests.length>0&&(
-          <div style={{background:'#fff8e1',border:'1.5px solid #f59e0b',borderRadius:12,padding:14,marginBottom:14}}>
-            <h4 style={{color:'#92400e',marginBottom:10}}>⏳ Admin Request ({adminRequests.length}টি অপেক্ষমাণ)</h4>
-            {adminRequests.map(req=>(
-              <div key={req.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px dashed #fde68a'}}>
-                <div>
-                  <p style={{fontWeight:700,fontSize:13}}>{req.name}</p>
-                  <p style={{fontSize:11,color:'#6b7280'}}>{req.email}</p>
-                </div>
-                <div style={{display:'flex',gap:6}}>
-                  <button onClick={()=>approveAdminRequest(req)}
-                    style={{background:'#10b981',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Approve</button>
-                  <button onClick={()=>rejectAdminRequest(req)}
-                    style={{background:'#ef4444',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Reject</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-          <div className="admin-grid-layout">
-            <div className="admin-col">
-              <div className="admin-card">
-                <h4>🖼️ হেডার ছবি (URL)</h4>
-                <input type="text" placeholder="ছবির লিঙ্ক..." value={headerImg} onChange={e=>setHeaderImg(e.target.value)}/>
-                {headerImg&&<img src={headerImg} alt="preview" style={{width:'100%',height:70,objectFit:'cover',borderRadius:8,marginTop:8}} onError={e=>{e.target.style.display='none';}}/>}
-                <h4 className="mt-15">📢 চলমান নোটিশ</h4>
-                <textarea placeholder="নোটিশ লিখুন..." value={notice} onChange={e=>setNotice(e.target.value)}/>
-                <button className="btn-primary mt-10" onClick={saveSettings}>সেভ করুন</button>
-              </div>
-              <div className="admin-card">
-                <h4>🔔 পুশ নোটিফিকেশন</h4>
-                <input type="text" placeholder="নোটিফিকেশন মেসেজ..." value={newNotif.text} onChange={e=>setNewNotif({...newNotif,text:e.target.value})}/>
-                <input type="number" className="mt-10" placeholder="কত মিনিট স্থায়ী?" value={newNotif.durationMins} onChange={e=>setNewNotif({...newNotif,durationMins:+e.target.value})}/>
-                <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
-                {activeNotifs.length>0&&<div style={{marginTop:10}}>{activeNotifs.map(n=><div key={n.id} style={{fontSize:12,padding:'6px 10px',background:'#fff8e1',borderRadius:8,marginBottom:4}}>🔔 {n.text}</div>)}</div>}
-              </div>
-              <div className="admin-card">
-                <h4>🖼️ কভার ফটো</h4>
-                <div style={{display:'flex',gap:8,marginBottom:10}}>
-                  <input type="text" placeholder="ছবির URL..." value={newCoverUrl} onChange={e=>setNewCoverUrl(e.target.value)}
-                    style={{flex:1,padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,background:'var(--green-pale)',outline:'none'}}
-                    onKeyDown={e=>{if(e.key==='Enter')addCoverPhoto();}}/>
-                  <button className="btn-primary" style={{width:'auto',padding:'8px 14px'}} onClick={addCoverPhoto}>যোগ</button>
-                </div>
-                <div className="cover-admin-grid">
-                  {coverPhotos.length===0&&<p style={{fontSize:12,color:'var(--muted)'}}>কোনো কভার ফটো নেই।</p>}
-                  {coverPhotos.map((url,i)=>(<div key={i} className="cover-admin-item"><img src={url} alt="" onError={e=>{e.target.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/><button onClick={()=>removeCoverPhoto(i)}>✕</button></div>))}
-                </div>
-              </div>
-            </div>
-            <div className="admin-col">
-              <div className="admin-card">
-                <h3 style={{color:'var(--green)',marginBottom:12}}>{editId?"✏️ এডিট পণ্য":"➕ নতুন পণ্য"}</h3>
-                <input type="text" placeholder="পণ্যের নাম" className="mb-10" value={newP.name} onChange={e=>setNewP({...newP,name:e.target.value})}/>
-                <div style={{display:'flex',gap:8,marginBottom:10}}>
-                  <input type="number" placeholder="দাম (৳)" value={newP.price} onChange={e=>setNewP({...newP,price:e.target.value})}/>
-                  <input type="text" placeholder="পরিমাণ (১ কেজি...)" value={newP.unit} onChange={e=>setNewP({...newP,unit:e.target.value})}/>
-                </div>
-                <div style={{display:'flex',gap:8,marginBottom:10}}>
-                  <select value={newP.category} onChange={e=>setNewP({...newP,category:e.target.value})}>{CATS.filter(c=>c!=='সব পণ্য').map(c=><option key={c}>{c}</option>)}</select>
-                  <input type="number" placeholder="স্টক" value={newP.stock} onChange={e=>setNewP({...newP,stock:e.target.value})}/>
-                </div>
-                <input type="text" placeholder="ছবির URL" className="mb-10" value={newP.image} onChange={e=>setNewP({...newP,image:e.target.value})}/>
-                {newP.image&&<img src={newP.image} alt="" style={{width:'100%',height:60,objectFit:'cover',borderRadius:8,marginBottom:8}} onError={e=>{e.target.style.display='none';}}/>}
-                <div style={{display:'flex',gap:8}}>
-                  <button className="btn-primary flex-1" onClick={saveProduct}>{editId?"আপডেট":"যোগ করুন"}</button>
-                  {editId&&<button className="btn-danger" onClick={()=>{setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});}}>বাতিল</button>}
-                </div>
-              </div>
-            </div>
-          </div>
-          <h3 className="section-title mt-20">স্টক লিস্ট ({products.length}টি)</h3>
-          <div className="stock-list-grid">
-            {products.map(p=>(
-              <div key={p.id} className="stock-item-row">
-                <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.target.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
-                <div className="si-details"><strong>{p.name}</strong><p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#dc2626':'inherit',fontWeight:700}}>{p.stock}</span></p></div>
-                <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP({...p,price:String(p.price),stock:String(p.stock)});window.scrollTo(0,0);}}>Edit</button>
-                <button className="btn-del" onClick={async()=>{if(window.confirm("ডিলিট করবেন?")){try{await deleteDoc(doc(db,'products',p.id));loadProducts();}catch(e){showToast('সমস্যা','error');}}}}>Del</button>
-              </div>
-            ))}
-          </div>
-        </>)}
-
+        {/* ── ORDERS ── */}
         {adminTab==='orders'&&(<>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
             <h3 className="section-title" style={{marginBottom:0}}>অর্ডার ম্যানেজমেন্ট</h3>
@@ -869,7 +784,7 @@ function AppInner(){
             <div className="admin-loading-box"><div className="admin-spinner"/><p>লোড হচ্ছে...</p></div>
           ):adminErr?(
             <div className="admin-error-box">
-              {adminErr==='RULES'?(<><p style={{fontWeight:700,marginBottom:8}}>🔒 Firestore Rules সমস্যা</p><div className="rules-code">{`rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`}</div><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
+              {adminErr==='RULES'?(<><p style={{fontWeight:700,marginBottom:8}}>🔒 Firestore Rules সমস্যা</p><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
               ):adminErr==='TIMEOUT'?(<><p style={{fontWeight:700}}>⏱️ সংযোগ ধীর</p><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>
               ):(<><p style={{fontSize:12}}>{adminErr}</p><button className="btn-primary mt-10" style={{width:'auto',padding:'8px 20px'}} onClick={fetchOrders}>আবার চেষ্টা</button></>)}
             </div>
@@ -888,7 +803,7 @@ function AppInner(){
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
                       <div style={{display:'flex',alignItems:'center',gap:8}}>
                         <strong style={{fontSize:14,color:'#111'}}>#{String(order.id).slice(-6).toUpperCase()}</strong>
-                        {isCancelledByCustomer&&<span style={{fontSize:10,background:'#fee2e2',color:'#991b1b',padding:'2px 8px',borderRadius:10,fontWeight:700}}>গ্রাহক বাতিল করেছেন</span>}
+                        {isCancelledByCustomer&&<span style={{fontSize:10,background:'#fee2e2',color:'#991b1b',padding:'2px 8px',borderRadius:10,fontWeight:700}}>গ্রাহক বাতিল</span>}
                       </div>
                       <span style={{fontSize:12,color:'#6b7280'}}>{order.date}</span>
                     </div>
@@ -900,11 +815,9 @@ function AppInner(){
                     <p style={{fontSize:13,marginBottom:8}}><b>পেমেন্ট:</b> <span style={{color:'var(--green)',fontWeight:700}}>{order.paymentMethod}</span> &nbsp;|&nbsp; <b>মোট:</b> <span style={{fontWeight:700}}>৳{order.total}</span></p>
                     {(order.paymentMethod==='Bkash'||order.paymentMethod==='Nogod')&&<div style={{background:'#fff8e1',padding:'6px 10px',borderRadius:8,fontSize:12,fontFamily:'monospace',marginBottom:8}}>TrxID: {order.userInfo?.transactionId} | Sender: {order.userInfo?.senderNumber}</div>}
                     <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <span style={{fontSize:13,fontWeight:700,background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'4px 12px',borderRadius:20,whiteSpace:'nowrap'}}>
-                        {ss.icon} {order.status}
-                      </span>
-                      {isCancelledByCustomer ? (
-                        <span style={{fontSize:12,color:'#6b7280',flex:1}}>🔒 গ্রাহক বাতিল করেছেন — পরিবর্তন সম্ভব নয়</span>
+                      <span style={{fontSize:13,fontWeight:700,background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'4px 12px',borderRadius:20,whiteSpace:'nowrap'}}>{ss.icon} {order.status}</span>
+                      {isCancelledByCustomer?(
+                        <span style={{fontSize:12,color:'#6b7280',flex:1}}>🔒 পরিবর্তন সম্ভব নয়</span>
                       ):(
                         <select style={{flex:1,padding:'7px 10px',borderRadius:9,border:'1.5px solid #d1d5db',fontFamily:'var(--font)',fontSize:13,fontWeight:600,cursor:'pointer',outline:'none'}}
                           value={order.status}
@@ -926,7 +839,212 @@ function AppInner(){
             </div>
           )}
         </>)}
+
+        {/* ── STOCK & SETTINGS ── */}
+        {adminTab==='stock'&&(<>
+          {/* Sub-navigation */}
+          <div style={{display:'flex',gap:8,marginBottom:16,borderBottom:'2px solid #e5e7eb',paddingBottom:12}}>
+            <button onClick={()=>setAdminStockTab('stock')}
+              style={{flex:1,padding:'10px',borderRadius:10,border:'none',fontFamily:'var(--font)',fontSize:14,fontWeight:700,cursor:'pointer',
+                background:adminStockTab==='stock'?'var(--green)':'#f3f4f6',
+                color:adminStockTab==='stock'?'#fff':'#374151'}}>
+              📦 স্টক
+            </button>
+            <button onClick={()=>setAdminStockTab('settings')}
+              style={{flex:1,padding:'10px',borderRadius:10,border:'none',fontFamily:'var(--font)',fontSize:14,fontWeight:700,cursor:'pointer',
+                background:adminStockTab==='settings'?'var(--green)':'#f3f4f6',
+                color:adminStockTab==='settings'?'#fff':'#374151'}}>
+              ⚙️ সেটিং
+            </button>
+          </div>
+
+          {/* STOCK SUB-TAB */}
+          {adminStockTab==='stock'&&(<>
+            <div className="admin-card" style={{marginBottom:16}}>
+              <h3 style={{color:'var(--green)',marginBottom:12}}>{editId?"✏️ এডিট পণ্য":"➕ নতুন পণ্য"}</h3>
+              <input type="text" placeholder="পণ্যের নাম" className="mb-10" value={newP.name} onChange={e=>setNewP({...newP,name:e.target.value})}/>
+              <div style={{display:'flex',gap:8,marginBottom:10}}>
+                <input type="number" placeholder="দাম (৳)" value={newP.price} onChange={e=>setNewP({...newP,price:e.target.value})}/>
+                <input type="text" placeholder="পরিমাণ (১ কেজি...)" value={newP.unit} onChange={e=>setNewP({...newP,unit:e.target.value})}/>
+              </div>
+              <div style={{display:'flex',gap:8,marginBottom:10}}>
+                <select value={newP.category} onChange={e=>setNewP({...newP,category:e.target.value})}>{CATS.filter(c=>c!=='সব পণ্য').map(c=><option key={c}>{c}</option>)}</select>
+                <input type="number" placeholder="স্টক" value={newP.stock} onChange={e=>setNewP({...newP,stock:e.target.value})}/>
+              </div>
+              <input type="text" placeholder="ছবির URL" className="mb-10" value={newP.image} onChange={e=>setNewP({...newP,image:e.target.value})}/>
+              {newP.image&&<img src={newP.image} alt="" style={{width:'100%',height:60,objectFit:'cover',borderRadius:8,marginBottom:8}} onError={e=>{e.target.style.display='none';}}/>}
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn-primary flex-1" onClick={saveProduct}>{editId?"আপডেট":"যোগ করুন"}</button>
+                {editId&&<button className="btn-danger" onClick={()=>{setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});}}>বাতিল</button>}
+              </div>
+            </div>
+            <h3 className="section-title mt-10">স্টক লিস্ট ({products.length}টি)</h3>
+            <div className="stock-list-grid">
+              {products.map(p=>(
+                <div key={p.id} className="stock-item-row">
+                  <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.target.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
+                  <div className="si-details"><strong>{p.name}</strong><p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#dc2626':'inherit',fontWeight:700}}>{p.stock}</span></p></div>
+                  <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP({...p,price:String(p.price),stock:String(p.stock)});window.scrollTo(0,0);}}>Edit</button>
+                  <button className="btn-del" onClick={async()=>{if(window.confirm("ডিলিট করবেন?")){try{await deleteDoc(doc(db,'products',p.id));loadProducts();}catch(e){showToast('সমস্যা','error');}}}}>Del</button>
+                </div>
+              ))}
+            </div>
+          </>)}
+
+          {/* SETTINGS SUB-TAB */}
+          {adminStockTab==='settings'&&(<>
+            {/* Admin List */}
+            {(adminRole==='master'||adminRole==='super_admin')&&(
+              <div style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,padding:16,marginBottom:16}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <h3 style={{color:'var(--green-dk)',fontSize:15,fontWeight:700,margin:0}}>👮 Admins</h3>
+                  {adminRole==='master'&&<button className="btn-primary" style={{width:'auto',padding:'6px 14px',fontSize:12}} onClick={()=>{setShowAddAdmin(true);loadAdmins();}}>+ যোগ</button>}
+                </div>
+                {showAddAdmin&&(
+                  <div style={{background:'#f0fdf4',border:'1.5px solid var(--border)',borderRadius:10,padding:14,marginBottom:12}}>
+                    <input type="text" placeholder="Firebase User UID" value={newAdminUid} onChange={e=>setNewAdminUid(e.target.value)}
+                      style={{width:'100%',padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,marginBottom:8,outline:'none',background:'#fff',boxSizing:'border-box'}}/>
+                    <select value={newAdminRole} onChange={e=>setNewAdminRole(e.target.value)}
+                      style={{width:'100%',padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,marginBottom:10,background:'#fff'}}>
+                      {adminRole==='master'&&<option value="super_admin">⭐ Super Admin</option>}
+                      <option value="editor">✏️ Editor</option>
+                    </select>
+                    <div style={{display:'flex',gap:8}}>
+                      <button className="btn-primary flex-1" onClick={addAdmin}>যোগ করুন</button>
+                      <button className="btn-danger" style={{padding:'10px 14px'}} onClick={()=>setShowAddAdmin(false)}>বাতিল</button>
+                    </div>
+                  </div>
+                )}
+                {adminsList.map(a=>(
+                  <div key={a.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px solid #f0f0f0'}}>
+                    <div>
+                      <p style={{fontWeight:700,fontSize:13}}>{a.name||'UID: '+a.id.slice(0,10)+'...'}</p>
+                      <span style={{fontSize:11,fontWeight:700,background:a.role==='master'?'#1a7a43':a.role==='super_admin'?'#2980b9':'#6b7280',color:'#fff',padding:'1px 8px',borderRadius:10,display:'inline-block'}}>
+                        {a.role==='master'?'👑 Master':a.role==='super_admin'?'⭐ Super Admin':'✏️ Editor'}
+                        {a.id===user?.id&&' (আপনি)'}
+                      </span>
+                    </div>
+                    {(adminRole==='master'&&a.role!=='master'&&a.id!==user?.id)||(adminRole==='super_admin'&&a.role==='editor'&&a.id!==user?.id)?(
+                      <button onClick={()=>removeAdmin(a.id,a.role)} style={{background:'#fee2e2',color:'#dc2626',border:'none',padding:'5px 12px',borderRadius:8,fontFamily:'var(--font)',fontSize:12,fontWeight:700,cursor:'pointer'}}>সরান</button>
+                    ):null}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Login Approval Requests */}
+            {(adminRole==='master'||adminRole==='super_admin')&&(
+              <div style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,padding:16,marginBottom:16}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                  <h3 style={{color:'var(--green-dk)',fontSize:15,fontWeight:700,margin:0}}>🔐 লগইন অনুরোধ ({loginRequests.length})</h3>
+                  <button onClick={loadLoginRequests} style={{background:'#f3f4f6',border:'none',borderRadius:8,padding:'5px 12px',fontSize:12,cursor:'pointer'}}>↻</button>
+                </div>
+                {loginRequests.length===0?<p style={{fontSize:13,color:'var(--muted)'}}>কোনো অপেক্ষমাণ অনুরোধ নেই।</p>:(
+                  loginRequests.map(req=>(
+                    <div key={req.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:'1px dashed #f0f0f0'}}>
+                      <div>
+                        <p style={{fontWeight:700,fontSize:13}}>{req.name||'নামহীন'}</p>
+                        <p style={{fontSize:11,color:'#6b7280'}}>{req.email}</p>
+                      </div>
+                      <div style={{display:'flex',gap:6}}>
+                        <button onClick={()=>approveLoginRequest(req)} style={{background:'#10b981',color:'#fff',border:'none',padding:'5px 12px',borderRadius:7,fontFamily:'var(--font)',fontSize:12,fontWeight:700,cursor:'pointer'}}>✅ অনুমোদন</button>
+                        <button onClick={()=>rejectLoginRequest(req)} style={{background:'#ef4444',color:'#fff',border:'none',padding:'5px 12px',borderRadius:7,fontFamily:'var(--font)',fontSize:12,fontWeight:700,cursor:'pointer'}}>❌ বাতিল</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Admin panel requests */}
+            {(adminRole==='master'||adminRole==='super_admin')&&adminRequests.length>0&&(
+              <div style={{background:'#fff8e1',border:'1.5px solid #f59e0b',borderRadius:12,padding:14,marginBottom:14}}>
+                <h4 style={{color:'#92400e',marginBottom:10}}>⏳ Admin Request ({adminRequests.length}টি)</h4>
+                {adminRequests.map(req=>(
+                  <div key={req.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px dashed #fde68a'}}>
+                    <div><p style={{fontWeight:700,fontSize:13}}>{req.name}</p><p style={{fontSize:11,color:'#6b7280'}}>{req.email}</p></div>
+                    <div style={{display:'flex',gap:6}}>
+                      <button onClick={()=>approveAdminRequest(req)} style={{background:'#10b981',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Approve</button>
+                      <button onClick={()=>rejectAdminRequest(req)} style={{background:'#ef4444',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontFamily:'var(--font)',fontSize:11,fontWeight:700,cursor:'pointer'}}>Reject</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Settings */}
+            <div className="admin-card" style={{marginBottom:12}}>
+              <h4>🖼️ হেডার ছবি (URL)</h4>
+              <input type="text" placeholder="ছবির লিঙ্ক..." value={headerImg} onChange={e=>setHeaderImg(e.target.value)}/>
+              {headerImg&&<img src={headerImg} alt="preview" style={{width:'100%',height:70,objectFit:'cover',borderRadius:8,marginTop:8}} onError={e=>{e.target.style.display='none';}}/>}
+              <h4 className="mt-15">📢 চলমান নোটিশ</h4>
+              <textarea placeholder="নোটিশ লিখুন..." value={notice} onChange={e=>setNotice(e.target.value)}/>
+              <button className="btn-primary mt-10" onClick={saveSettings}>সেভ করুন</button>
+            </div>
+            <div className="admin-card" style={{marginBottom:12}}>
+              <h4>🔔 পুশ নোটিফিকেশন</h4>
+              <input type="text" placeholder="নোটিফিকেশন মেসেজ..." value={newNotif.text} onChange={e=>setNewNotif({...newNotif,text:e.target.value})}/>
+              <input type="number" className="mt-10" placeholder="কত মিনিট স্থায়ী?" value={newNotif.durationMins} onChange={e=>setNewNotif({...newNotif,durationMins:+e.target.value})}/>
+              <button className="btn-warning mt-10" onClick={sendNotif}>সেন্ড করুন</button>
+            </div>
+            <div className="admin-card">
+              <h4>🖼️ কভার ফটো</h4>
+              <div style={{display:'flex',gap:8,marginBottom:10}}>
+                <input type="text" placeholder="ছবির URL..." value={newCoverUrl} onChange={e=>setNewCoverUrl(e.target.value)}
+                  style={{flex:1,padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,background:'var(--green-pale)',outline:'none'}}
+                  onKeyDown={e=>{if(e.key==='Enter')addCoverPhoto();}}/>
+                <button className="btn-primary" style={{width:'auto',padding:'8px 14px'}} onClick={addCoverPhoto}>যোগ</button>
+              </div>
+              <div className="cover-admin-grid">
+                {coverPhotos.length===0&&<p style={{fontSize:12,color:'var(--muted)'}}>কোনো কভার ফটো নেই।</p>}
+                {coverPhotos.map((url,i)=>(<div key={i} className="cover-admin-item"><img src={url} alt="" onError={e=>{e.target.src='https://placehold.co/80x40/e8f5e9/27ae60?text=err';}}/><button onClick={()=>removeCoverPhoto(i)}>✕</button></div>))}
+              </div>
+            </div>
+          </>)}
+        </>)}
+
+        {/* ── ABOUT ── */}
+        {adminTab==='about'&&(
+          <div style={{padding:16}}>
+            <div style={{background:'#fff',borderRadius:12,padding:20,border:'1.5px solid #e5e7eb',textAlign:'center'}}>
+              <div style={{fontSize:48,marginBottom:8}}>🌿</div>
+              <h3 style={{color:'var(--green)'}}>সাকিব স্টোর</h3>
+              <p style={{color:'var(--muted)',marginTop:8}}>Admin Panel v7.0</p>
+              <p style={{fontSize:13,color:'#374151',marginTop:12}}>সকল অর্ডার, স্টক এবং সেটিংস এখান থেকে পরিচালনা করুন।</p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Admin 5-item Bottom Nav */}
+      <footer className="bottom-nav" style={{borderTop:'2px solid rgba(255,255,255,0.1)',background:'#1a7a43'}}>
+        <div className={`nav-icon ${adminTab==='orders'?'active':''}`}
+          style={{color:adminTab==='orders'?'#fff':'rgba(255,255,255,0.7)'}}
+          onClick={()=>{setAdminTab('orders');fetchOrders();}}>
+          <span>📦</span><span style={{fontSize:10}}>অর্ডার</span>
+          {allOrders.filter(o=>o.status==='Pending').length>0&&<span className="nav-badge">{bn(allOrders.filter(o=>o.status==='Pending').length)}</span>}
+        </div>
+        <div className={`nav-icon ${adminTab==='stock'&&adminStockTab==='stock'?'active':''}`}
+          style={{color:adminTab==='stock'&&adminStockTab==='stock'?'#fff':'rgba(255,255,255,0.7)'}}
+          onClick={()=>{setAdminTab('stock');setAdminStockTab('stock');}}>
+          <span>📊</span><span style={{fontSize:10}}>স্টক</span>
+        </div>
+        <div className={`nav-icon ${adminTab==='stock'&&adminStockTab==='settings'?'active':''}`}
+          style={{color:adminTab==='stock'&&adminStockTab==='settings'?'#fff':'rgba(255,255,255,0.7)'}}
+          onClick={()=>{setAdminTab('stock');setAdminStockTab('settings');loadLoginRequests();loadAdminRequests();}}>
+          <span>⚙️</span><span style={{fontSize:10}}>সেটিং</span>
+          {(loginRequests.length+adminRequests.length)>0&&<span className="nav-badge">{bn(loginRequests.length+adminRequests.length)}</span>}
+        </div>
+        <div className="nav-icon" style={{color:'rgba(255,255,255,0.7)'}}
+          onClick={()=>{setMode('customer');goto('home');}}>
+          <span>🏠</span><span style={{fontSize:10}}>হোম</span>
+        </div>
+        <div className={`nav-icon ${adminTab==='about'?'active':''}`}
+          style={{color:adminTab==='about'?'#fff':'rgba(255,255,255,0.7)'}}
+          onClick={()=>setAdminTab('about')}>
+          <span>ℹ️</span><span style={{fontSize:10}}>তথ্য</span>
+        </div>
+      </footer>
     </div>
   );
 
@@ -939,20 +1057,45 @@ function AppInner(){
     <div className="app-container">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
 
+
+      {/* Email Verification Banner */}
       {verifyBanner&&(
-        <div style={{
-          position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',
-          width:'100%',maxWidth:480,zIndex:9998,
-          background: verifyBanner.type==='info'?'#dbeafe':'#fef9c3',
-          borderBottom:`2px solid ${verifyBanner.type==='info'?'#3b82f6':'#f59e0b'}`,
-          padding:'10px 44px 10px 16px',
-          fontSize:13,lineHeight:1.5,color:'#1e3a5f'
-        }}>
+        <div style={{position:'fixed',top:0,left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:480,zIndex:9998,background:verifyBanner.type==='info'?'#dbeafe':'#fef9c3',borderBottom:`2px solid ${verifyBanner.type==='info'?'#3b82f6':'#f59e0b'}`,padding:'10px 44px 10px 16px',fontSize:13,lineHeight:1.5,color:'#1e3a5f'}}>
           {verifyBanner.msg}
           <button onClick={()=>setVerifyBanner(null)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',fontSize:18,cursor:'pointer',color:'#374151',padding:'0 4px'}}>✕</button>
         </div>
       )}
 
+      {/* Guest Order Transfer Modal */}
+      {showTransferModal&&(
+        <div className="modal-bg" onClick={()=>setShowTransferModal(false)}>
+          <div className="modal-box" onClick={e=>e.stopPropagation()}>
+            <div style={{textAlign:'center',marginBottom:16}}>
+              <div style={{fontSize:48}}>📦</div>
+              <h3 style={{color:'var(--green-dk)',marginTop:8}}>অর্ডার স্থানান্তর</h3>
+            </div>
+            <p style={{fontSize:14,lineHeight:1.6,marginBottom:16,color:'#374151'}}>আপনার গেস্ট অ্যাকাউন্টে কিছু অর্ডার আছে। লগইন করার পর সেগুলো কি আপনার নতুন অ্যাকাউন্টে নিয়ে যাবেন?</p>
+            <div style={{display:'flex',gap:10}}>
+              <button className="btn-primary flex-1" onClick={async()=>{
+                setShowTransferModal(false);
+                if(pendingLoginFn){
+                  await pendingLoginFn(true); // pass transferOrders=true
+                  setPendingLoginFn(null);
+                }
+              }}>✅ হ্যাঁ, নিয়ে যান</button>
+              <button className="btn-outline flex-1" onClick={async()=>{
+                setShowTransferModal(false);
+                if(pendingLoginFn){
+                  await pendingLoginFn(false);
+                  setPendingLoginFn(null);
+                }
+              }}>না, থাকুক</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Login Prompt */}
       {showAdminLoginPrompt&&(
         <div className="modal-bg" onClick={()=>{setShowAdminLoginPrompt(false);setAdminPass('');}}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -962,16 +1105,37 @@ function AppInner(){
             </div>
             <input type="password" placeholder="পাসওয়ার্ড দিন..." value={adminPass}
               onChange={e=>setAdminPass(e.target.value)} className="auth-input mb-15"
-              onKeyDown={e=>{if(e.key==='Enter') handleAdminLoginSubmit(); }}/>
-            <button className="btn-primary mb-10" onClick={handleAdminLoginSubmit}>লগইন</button>
+              onKeyDown={e=>{
+                if(e.key==='Enter'){
+                  if(adminPass==='sakib123'){
+                    showToast('সঠিক পাসওয়ার্ড! Master Admin-এর কাছে request পাঠানো হয়েছে। Approved হলে এডমিন হতে পারবেন।','success');
+                    sendAdminRequest('Admin panel access request — correct password entered');
+                    setShowAdminLoginPrompt(false);setAdminPass('');
+                  }else{
+                    showToast('ভুল পাসওয়ার্ড!','error');
+                    setAdminPass('');
+                  }
+                }
+              }}/>
+            <button className="btn-primary mb-10" onClick={()=>{
+              if(adminPass==='sakib123'){
+                // Correct password → send request to master/super_admin, don't grant access
+                showToast('সঠিক পাসওয়ার্ড! Master Admin-এর কাছে request পাঠানো হয়েছে। Approved হলে এডমিন হতে পারবেন।','success');
+                sendAdminRequest('Admin panel access request — correct password entered');
+                setShowAdminLoginPrompt(false);setAdminPass('');
+              }else{
+                // Wrong password → error only, NO request sent
+                showToast('ভুল পাসওয়ার্ড!','error');
+                setAdminPass('');
+              }
+            }}>প্রবেশ করুন</button>
             <button className="btn-outline" onClick={()=>{setShowAdminLoginPrompt(false);setAdminPass('');}}>বাতিল</button>
-            <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:12}}>
-              ভুল পাসওয়ার্ড দিলে Master Admin-এর কাছে request যাবে।
-            </p>
+            <p style={{fontSize:11,color:'var(--muted)',textAlign:'center',marginTop:12}}>ভুল পাসওয়ার্ড দিলে Master Admin-এর কাছে request যাবে।</p>
           </div>
         </div>
       )}
 
+      {/* Logout Confirm */}
       {showLogoutConfirm&&(
         <div className="modal-bg" onClick={()=>setShowLogoutConfirm(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -985,6 +1149,7 @@ function AppInner(){
         </div>
       )}
 
+      {/* Emoji Picker */}
       {showEmojiPicker&&(
         <div className="modal-bg" onClick={()=>setShowEmojiPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -996,6 +1161,7 @@ function AppInner(){
         </div>
       )}
 
+      {/* Cover Picker */}
       {showCoverPicker&&(
         <div className="modal-bg" onClick={()=>setShowCoverPicker(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -1026,6 +1192,7 @@ function AppInner(){
         </div>
       )}
 
+      {/* Notification Modal */}
       {showNotifModal&&(
         <div className="modal-bg" onClick={()=>setShowNotifModal(false)}>
           <div className="modal-box" onClick={e=>e.stopPropagation()}>
@@ -1043,6 +1210,7 @@ function AppInner(){
         </div>
       )}
 
+      {/* Drawer */}
       <div className={`drawer-overlay ${drawer?'active':''}`} onClick={()=>setDrawer(false)}/>
       <div className={`side-drawer ${drawer?'open':''}`}>
         <div className="drawer-head"><span>🌿 সাকিব স্টোর</span><button className="drawer-close" onClick={()=>setDrawer(false)}>✕</button></div>
@@ -1054,8 +1222,9 @@ function AppInner(){
         </ul>
       </div>
 
+      {/* Header */}
       {isHome?(
-        <header className="main-header" style={{marginTop: verifyBanner?44:0}}>
+        <header className="main-header" style={{marginTop:verifyBanner?44:0}}>
           <img src={headerImg} alt="header" className="header-bg-img" onError={e=>{e.target.style.display='none';}}/>
           <div className="header-overlay">
             <button className="icon-btn" onClick={()=>setDrawer(true)}>☰</button>
@@ -1066,7 +1235,7 @@ function AppInner(){
           </div>
         </header>
       ):(
-        <header className="mini-header" style={{marginTop: verifyBanner?44:0}}>
+        <header className="mini-header" style={{marginTop:verifyBanner?44:0}}>
           <button className="icon-btn-dark" onClick={()=>setDrawer(true)}>☰</button>
           <div className="mini-header-title">সাকিব স্টোর</div>
           <button className="icon-btn-dark notif-btn" onClick={()=>setShowNotifModal(true)}>
@@ -1078,6 +1247,8 @@ function AppInner(){
       <div className="marquee-wrapper"><div className="marquee-track"><span>📢 {notice}&nbsp;&nbsp;&nbsp;&nbsp;📢 {notice}</span></div></div>
 
       <main className="main-content">
+
+        {/* HOME */}
         {tab==='home'&&(
           <div className="page-home">
             <div className="search-wrapper">
@@ -1100,6 +1271,7 @@ function AppInner(){
           </div>
         )}
 
+        {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
             <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
@@ -1110,6 +1282,7 @@ function AppInner(){
           </div>
         )}
 
+        {/* CART */}
         {tab==='cart'&&(
           <div className="page-cart">
             <h2 className="section-title text-center">আপনার কার্ট 🛒</h2>
@@ -1173,6 +1346,7 @@ function AppInner(){
           </div>
         )}
 
+        {/* PROFILE */}
         {tab==='profile'&&(
           <div className="page-profile">
             {!user?(
@@ -1180,6 +1354,7 @@ function AppInner(){
                 <div style={{fontSize:64,marginBottom:12}}>🛒</div>
                 <h2 className="mb-10">লগইন করুন</h2>
 
+                {/* ── CHOICE ── */}
                 {authMode==='choice'&&(<>
                   <p style={{color:'var(--muted)',marginBottom:20,fontSize:14}}>অর্ডার ট্র্যাক ও তথ্য সেভ করতে লগইন করুন।</p>
                   <button className="btn-google mb-10" onClick={googleLogin} disabled={authLoading}>
@@ -1193,32 +1368,69 @@ function AppInner(){
                   <p style={{color:'var(--muted)',marginTop:15,fontSize:12}}>Google/Email লগইন করলে ডেটা চিরস্থায়ী থাকে।</p>
                 </>)}
 
+                {/* ── EMAIL LOGIN ── */}
                 {authMode==='email-login'&&(
                   <div style={{width:'100%',maxWidth:300}}>
                     <p style={{color:'var(--muted)',marginBottom:15,fontSize:14}}>ইমেইল ও পাসওয়ার্ড দিয়ে লগইন করুন</p>
                     <input type="email" placeholder="ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
-                    <input type="password" placeholder="পাসওয়ার্ড" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15" onKeyDown={e=>{if(e.key==='Enter')emailLogin();}}/>
+                    {/* Password with show/hide */}
+                    <div style={{position:'relative',marginBottom:6}}>
+                      <input type={showPass?'text':'password'} placeholder="পাসওয়ার্ড" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input"
+                        style={{paddingRight:42}} onKeyDown={e=>{if(e.key==='Enter')emailLogin();}}/>
+                      <button type="button" onClick={()=>setShowPass(v=>!v)}
+                        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:18,color:'#6b7280',padding:0}}>
+                        {showPass?'🙈':'👁️'}
+                      </button>
+                    </div>
+                    {/* Forgot Password */}
+                    <div style={{textAlign:'right',marginBottom:12}}>
+                      <button type="button" onClick={()=>setAuthMode('forgot-password')}
+                        style={{background:'none',border:'none',color:'var(--green)',fontSize:12,cursor:'pointer',textDecoration:'underline',fontFamily:'var(--font)'}}>
+                        পাসওয়ার্ড ভুলে গেছেন?
+                      </button>
+                    </div>
                     <button className="btn-primary mb-10" onClick={emailLogin} disabled={authLoading}>{authLoading?'লোড...':'লগইন করুন'}</button>
-                    
-                    <button style={{background:'none', border:'none', color:'var(--green)', textDecoration:'underline', marginBottom:15, cursor:'pointer', fontSize: 13}} onClick={resetPassword}>
-                      পাসওয়ার্ড ভুলে গেছেন?
-                    </button>
-                    
-                    <div style={{fontSize: 12, color: 'var(--muted)', marginBottom: 10, marginTop:10}}>লগইন করার আগে অ্যাকাউন্ট না থাকলে তৈরি করে নিন।</div>
-                    <button className="btn-outline" style={{marginBottom:15}} onClick={()=>{setAuthMode('email-register'); setEmailInput(''); setPassInput('');}}>
-                      নতুন অ্যাকাউন্ট তৈরি করুন
-                    </button>
-
-                    <button className="btn-outline" style={{border:'none', marginTop:10}} onClick={()=>{setAuthMode('choice');setEmailInput('');setPassInput('');}}>← ফিরে যান</button>
+                    <button className="btn-outline mb-10" onClick={()=>{setAuthMode('choice');setEmailInput('');setPassInput('');}}>← ফিরে যান</button>
+                    {/* New account hint */}
+                    <div style={{marginTop:16,padding:'12px 14px',background:'#f0fdf4',borderRadius:10,border:'1px solid #bbf7d0',textAlign:'left'}}>
+                      <p style={{fontSize:12,color:'#374151',marginBottom:8,lineHeight:1.5}}>
+                        💡 <b>প্রথমবার?</b> লগইন করার আগে নতুন অ্যাকাউন্ট তৈরি করুন। Gmail দিয়ে অ্যাকাউন্ট তৈরি করে ভেরিফাই করলে পরের যেকোনো সময় Gmail ও পাসওয়ার্ড দিয়ে সহজেই ঢুকতে পারবেন।
+                      </p>
+                      <button className="btn-email-reg" style={{width:'100%',padding:'9px'}} onClick={()=>setAuthMode('email-register')}>✏️ নতুন অ্যাকাউন্ট তৈরি করুন</button>
+                    </div>
                   </div>
                 )}
 
+                {/* ── FORGOT PASSWORD ── */}
+                {authMode==='forgot-password'&&(
+                  <div style={{width:'100%',maxWidth:300}}>
+                    <div style={{fontSize:48,marginBottom:8}}>🔑</div>
+                    <h3 style={{color:'var(--green-dk)',marginBottom:8}}>পাসওয়ার্ড রিসেট</h3>
+                    <p style={{color:'var(--muted)',marginBottom:15,fontSize:13,lineHeight:1.5}}>আপনার ইমেইল দিন। সেখানে পাসওয়ার্ড পরিবর্তনের লিংক পাঠানো হবে।</p>
+                    <input type="email" placeholder="আপনার ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-15"
+                      onKeyDown={e=>{if(e.key==='Enter')forgotPassword();}}/>
+                    <button className="btn-primary mb-10" onClick={forgotPassword} disabled={authLoading}>{authLoading?'পাঠানো হচ্ছে...':'রিসেট লিংক পাঠান'}</button>
+                    <button className="btn-outline" onClick={()=>{setAuthMode('email-login');}}>← ফিরে যান</button>
+                  </div>
+                )}
+
+                {/* ── EMAIL REGISTER ── */}
                 {authMode==='email-register'&&(
                   <div style={{width:'100%',maxWidth:300}}>
-                    <p style={{color:'var(--muted)',marginBottom:15,fontSize:14}}>নতুন অ্যাকাউন্ট তৈরি করুন</p>
+                    <p style={{color:'var(--muted)',marginBottom:8,fontSize:13,lineHeight:1.5,background:'#f0fdf4',padding:'10px 12px',borderRadius:10,border:'1px solid #bbf7d0',textAlign:'left'}}>
+                      📌 Gmail দিয়ে নতুন অ্যাকাউন্ট তৈরি করুন। একবার ভেরিফাই হলে পরবর্তী যেকোনো সময় Gmail ও পাসওয়ার্ড দিয়ে সহজেই লগইন করতে পারবেন।
+                    </p>
                     <input type="text" placeholder="আপনার নাম" value={nameInput} onChange={e=>setNameInput(e.target.value)} className="auth-input mb-10"/>
-                    <input type="email" placeholder="ইমেইল" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
-                    <input type="password" placeholder="পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input mb-15"/>
+                    <input type="email" placeholder="ইমেইল (Gmail)" value={emailInput} onChange={e=>setEmailInput(e.target.value)} className="auth-input mb-10"/>
+                    {/* Password with show/hide */}
+                    <div style={{position:'relative',marginBottom:15}}>
+                      <input type={showPass2?'text':'password'} placeholder="পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)" value={passInput} onChange={e=>setPassInput(e.target.value)} className="auth-input"
+                        style={{paddingRight:42}}/>
+                      <button type="button" onClick={()=>setShowPass2(v=>!v)}
+                        style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:18,color:'#6b7280',padding:0}}>
+                        {showPass2?'🙈':'👁️'}
+                      </button>
+                    </div>
                     <button className="btn-primary mb-10" onClick={emailRegister} disabled={authLoading}>{authLoading?'তৈরি হচ্ছে...':'অ্যাকাউন্ট তৈরি করুন'}</button>
                     <button className="btn-outline" onClick={()=>{setAuthMode('choice');setEmailInput('');setPassInput('');setNameInput('');}}>← ফিরে যান</button>
                   </div>
@@ -1237,22 +1449,12 @@ function AppInner(){
                     </div>
                     <div className="user-titles">
                       <h3>{info.name||(user.isAnon?'গেস্ট ইউজার':user.name||'নাম দিন')}</h3>
-                      <p>{user.email||(user.isAnon?'Guest Account':'')}</p>
+                      <p>{user.email||(user.isAnon?'🔒 Guest Account':'')}</p>
                       {user.email&&!user.isAnon&&!user.emailVerified&&<p style={{fontSize:11,color:'#d97706',fontWeight:600}}>⚠️ ইমেইল ভেরিফাই করুন</p>}
+                      {user.isAnon&&<p style={{fontSize:11,color:'#6b7280'}}>ID: {guestId.slice(0,14)}...</p>}
                     </div>
                   </div>
                 </div>
-
-                {user.isAnon && (
-                  <div style={{margin: '20px 16px 0', background: '#f0fdf4', border: '1.5px dashed var(--green)', borderRadius: '12px', padding: '16px', textAlign: 'center'}}>
-                    <h4 style={{color: 'var(--green)', marginBottom: '8px'}}>🔒 অ্যাকাউন্ট সুরক্ষিত করুন</h4>
-                    <p style={{fontSize: '12px', color: 'var(--muted)', marginBottom: '12px', lineHeight:'1.5'}}>গেস্ট হিসেবে আপনার অর্ডার করা তথ্যগুলো চিরস্থায়ী সেভ রাখতে এবং যেকোনো ডিভাইস থেকে দেখতে Google দিয়ে লিঙ্ক করুন।</p>
-                    <button className="btn-google" onClick={linkGuestToGoogle} style={{width:'100%', padding:'10px', fontSize:'14px'}}>
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="18" style={{marginRight:'8px', verticalAlign:'middle'}}/>
-                      Google দিয়ে লিঙ্ক করুন
-                    </button>
-                  </div>
-                )}
 
                 <div style={{padding:'0 16px'}}>
                   <h3 className="sub-title mt-20">✏️ আপনার তথ্য</h3>
@@ -1268,6 +1470,7 @@ function AppInner(){
                   </div>
                 </div>
 
+                {/* Orders */}
                 <div style={{padding:'0 16px',marginTop:20}}>
                   <h3 className="sub-title">📦 আপনার অর্ডার ({userOrders.length})</h3>
                   {userOrders.length===0?<p style={{color:'var(--muted)'}}>কোনো অর্ডার নেই।</p>:(
@@ -1322,6 +1525,28 @@ function AppInner(){
                     })
                   )}
                 </div>
+
+                {/* Guest login suggestion */}
+                {user.isAnon&&(
+                  <div style={{margin:'20px 16px',padding:'16px',background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',borderRadius:14,border:'1.5px solid #bbf7d0'}}>
+                    <p style={{fontSize:14,fontWeight:700,color:'#1a7a43',marginBottom:6}}>💡 ডেটা সবসময় সেভ রাখুন!</p>
+                    <p style={{fontSize:12,color:'#374151',marginBottom:14,lineHeight:1.6}}>
+                      Google বা ইমেইল দিয়ে লগইন করলে আপনার অর্ডার তথ্য সবসময় সেভ থাকবে এবং যেকোনো সময় যেকোনো ডিভাইস থেকে দেখতে পাবেন।
+                    </p>
+                    <button className="btn-google mb-10" onClick={linkGuestToGoogle} disabled={authLoading} style={{width:'100%'}}>
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="18" style={{marginRight:8,verticalAlign:'middle'}}/>
+                      Google দিয়ে লগইন করুন
+                    </button>
+                    <button className="btn-email" style={{width:'100%'}} onClick={()=>{
+                      // Sign out guest first, then go to email login
+                      const doIt=async()=>{
+                        await signOut(auth);
+                        setAuthMode('email-login');
+                      };doIt();
+                    }}>📧 ইমেইল দিয়ে লগইন করুন</button>
+                  </div>
+                )}
+
                 <div style={{padding:'0 16px'}}>
                   <button className="btn-danger w-full mt-20" onClick={confirmLogout}>🚪 লগ আউট করুন</button>
                 </div>
@@ -1330,6 +1555,7 @@ function AppInner(){
           </div>
         )}
 
+        {/* ABOUT */}
         {tab==='about'&&(
           <div className="about-view">
             <h2 style={{color:'var(--green)',marginBottom:20}}>About Us</h2>
@@ -1344,32 +1570,38 @@ function AppInner(){
         )}
       </main>
 
+      {/* Bottom Navigation — Admin: 5 icons, Regular: 4 icons */}
       <footer className="bottom-nav">
-        <div className={`nav-icon ${(tab==='home'||mode==='admin')?'active':''}`}
+        {/* এডমিন আইকন — শুধু adminRole থাকলে দেখা যাবে */}
+        {adminRole&&(
+          <div className={`nav-icon ${mode==='admin'?'active':''}`}
+            style={{color:mode==='admin'?'var(--green)':'#e74c3c'}}
+            onClick={()=>{setMode('admin');setAdminTab('stock');loadAdmins();if(adminRole==='master'||adminRole==='super_admin')loadAdminRequests();}}>
+            <span>🛡️</span>
+            <span style={{fontSize:10,fontWeight:700}}>প্যানেল</span>
+          </div>
+        )}
+
+        {/* Home — সবার জন্য | 7 rapid clicks = admin request trigger */}
+        <div className={`nav-icon ${tab==='home'&&mode==='customer'?'active':''}`}
           onClick={()=>{
-            if(adminRole){
-              if(mode==='admin'){exitAdmin();}
-              else{setMode('admin');setAdminTab('stock');loadAdmins();}
-              return;
-            }
             goto('home');
+            if(mode==='admin'){setMode('customer');return;}
             const n=homeClicks+1;
             if(homeClickTimer)clearTimeout(homeClickTimer);
             if(n>=7){
               setHomeClicks(0);setHomeClickTimer(null);
               if(user&&!user.isAnon){setShowAdminLoginPrompt(true);}
-              else{showToast('অ্যাডমিন হতে আগে প্রোফাইল থেকে লগইন করুন!','warning');}
+              else{showToast('অ্যাডমিন হতে আগে লগইন করুন!','warning');}
             }else{
               setHomeClicks(n);
               const t=setTimeout(()=>setHomeClicks(0),3000);
               setHomeClickTimer(t);
             }
           }}>
-          <span>{adminRole?(mode==='admin'?'🏠':'🛡️'):'🏠'}</span>
-          <span style={{fontSize:10,fontWeight:adminRole?700:500,color:adminRole?(mode==='admin'?'var(--green)':'#e74c3c'):'inherit'}}>
-            {adminRole?(mode==='admin'?'হোম':'প্যানেল'):'হোম'}
-          </span>
+          <span>🏠</span><span>হোম</span>
         </div>
+
         <div className={`nav-icon ${tab==='categories'?'active':''}`} onClick={()=>goto('categories')}><span>🗂️</span><span>ক্যাটাগরি</span></div>
         <div className={`nav-icon cart-nav ${tab==='cart'?'active':''}`} onClick={()=>goto('cart')}>
           <span>🛒</span><span>কার্ট</span>
