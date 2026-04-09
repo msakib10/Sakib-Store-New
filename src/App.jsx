@@ -49,7 +49,7 @@ const CATS=['সব পণ্য','পাইকারি','চাল','ডাল
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
 const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
-const DEFINFO={name:'',phone:'',locationType:'',district:'',area:'',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -1307,7 +1307,8 @@ function AppInner(){
             )}
           </div>
         )}
-    {/* CATEGORIES */}
+
+        {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
             <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
