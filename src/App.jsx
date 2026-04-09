@@ -49,7 +49,7 @@ const CATS=['সব পণ্য','পাইকারি','চাল','ডাল
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
 const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFINFO={name:'',phone:'',locationType:'',district:'',area:'',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -733,6 +733,32 @@ function AppInner(){
   );
 
   // ══════ ADMIN LOGIN ══════
+  const handleAdminLoginLogic=async()=>{
+    if(adminPass==='sakib123'){
+      // Check if Master Admin by email
+      if(user&&user.email===MASTER_ADMIN_EMAIL){
+        // Master Admin - direct access
+        setMode('admin');setAdminTab('orders');setAdminPass('');
+        if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
+        loadAdmins();
+        setAdminRole('master');
+        localStorage.setItem('sakib_admin_role','master');
+        localStorage.setItem('sakib_admin_uid',user.id);
+        showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
+      }else{
+        // Other users - request approval
+        if(!user||user.isAnon){
+          showToast('প্রথমে লগইন করুন!','error');
+        }else{
+          showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
+          await sendAdminRequest('Admin panel access request — correct password entered');
+          setMode('customer');
+          goto('home');
+        }
+      }
+    }else showToast('ভুল পাসওয়ার্ড!','error');
+  };
+
   if(mode==='adminLogin')return(
     <div className="fullscreen-center">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
@@ -740,54 +766,8 @@ function AppInner(){
         <div style={{fontSize:56,marginBottom:12}}>🛡️</div>
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
-          onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){
-            // Check if Master Admin by email
-            if(user&&user.email===MASTER_ADMIN_EMAIL){
-              // Master Admin - direct access
-              setMode('admin');setAdminTab('orders');setAdminPass('');
-              if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
-              loadAdmins();
-              setAdminRole('master');
-              localStorage.setItem('sakib_admin_role','master');
-              localStorage.setItem('sakib_admin_uid',user.id);
-              showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
-            }else{
-              // Other users - request approval
-              if(!user||user.isAnon){
-                showToast('প্রথমে লগইন করুন!','error');
-              }else{
-                showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
-                sendAdminRequest('Admin panel access request — correct password entered');
-                setMode('customer');
-                goto('home');
-              }
-            }
-          }else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
-        <button className="btn-primary" onClick={async()=>{
-          if(adminPass==='sakib123'){
-            // Check if Master Admin by email
-            if(user&&user.email===MASTER_ADMIN_EMAIL){
-              // Master Admin - direct access
-              setMode('admin');setAdminTab('orders');setAdminPass('');
-              if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
-              loadAdmins();
-              setAdminRole('master');
-              localStorage.setItem('sakib_admin_role','master');
-              localStorage.setItem('sakib_admin_uid',user.id);
-              showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
-            }else{
-              // Other users - request approval
-              if(!user||user.isAnon){
-                showToast('প্রথমে লগইন করুন!','error');
-              }else{
-                showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
-                sendAdminRequest('Admin panel access request — correct password entered');
-                setMode('customer');
-                goto('home');
-              }
-            }
-          }else showToast('ভুল পাসওয়ার্ড!','error');
-        }}>লগইন</button>
+          onKeyDown={e=>{if(e.key==='Enter'){handleAdminLoginLogic();}}}/>
+        <button className="btn-primary" onClick={handleAdminLoginLogic}>লগইন</button>
         <button className="btn-outline mt-10" onClick={()=>{setMode('customer');goto('home');}}>← ফিরে যান</button>
       </div>
     </div>
