@@ -33,7 +33,7 @@ class ErrorBoundary extends Component {
 // ─── Firebase ──────────────────────────────────────────────────────────────────
 const FB = initializeApp({
   apiKey:"AIzaSyBSKT0kmhfyLHSur-Z8nnj3jrYn2KBcP0M",
-  authDomain:"sakib-store1.firebaseapp.com",
+  authDomain:"sakibstore.shop",
   projectId:"sakib-store1",
   storageBucket:"sakib-store1.firebasestorage.app",
   messagingSenderId:"514373347826",
@@ -44,11 +44,12 @@ const auth = getAuth(FB);
 const gp = new GoogleAuthProvider();
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
+const MASTER_ADMIN_EMAIL = "admin10sakibstore@gmail.com";
 const CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
 const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFINFO={name:'',phone:'',locationType:'',district:'',area:'',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -740,15 +741,51 @@ function AppInner(){
         <h2>অ্যাডমিন লগইন</h2>
         <input type="password" className="admin-input" placeholder="পাসওয়ার্ড দিন..." value={adminPass} onChange={e=>setAdminPass(e.target.value)}
           onKeyDown={e=>{if(e.key==='Enter'){if(adminPass==='sakib123'){
-            const go=async()=>{setMode('admin');setAdminTab('orders');setAdminPass('');if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}loadAdmins();if(user&&!user.isAnon)loadAdminRole(user.id);else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}};go();
+            // Check if Master Admin by email
+            if(user&&user.email===MASTER_ADMIN_EMAIL){
+              // Master Admin - direct access
+              setMode('admin');setAdminTab('orders');setAdminPass('');
+              if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
+              loadAdmins();
+              setAdminRole('master');
+              localStorage.setItem('sakib_admin_role','master');
+              localStorage.setItem('sakib_admin_uid',user.id);
+              showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
+            }else{
+              // Other users - request approval
+              if(!user||user.isAnon){
+                showToast('প্রথমে লগইন করুন!','error');
+              }else{
+                showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
+                sendAdminRequest('Admin panel access request — correct password entered');
+                setMode('customer');
+                goto('home');
+              }
+            }
           }else showToast('ভুল পাসওয়ার্ড!','error');}}}/>
         <button className="btn-primary" onClick={async()=>{
           if(adminPass==='sakib123'){
-            setMode('admin');setAdminTab('orders');setAdminPass('');
-            if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
-            loadAdmins();
-            if(user&&!user.isAnon)loadAdminRole(user.id);
-            else if(!adminRole){setAdminRole('master');localStorage.setItem('sakib_admin_role','master');}
+            // Check if Master Admin by email
+            if(user&&user.email===MASTER_ADMIN_EMAIL){
+              // Master Admin - direct access
+              setMode('admin');setAdminTab('orders');setAdminPass('');
+              if(!auth.currentUser){try{await signInAnonymously(auth);}catch(_){}}
+              loadAdmins();
+              setAdminRole('master');
+              localStorage.setItem('sakib_admin_role','master');
+              localStorage.setItem('sakib_admin_uid',user.id);
+              showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
+            }else{
+              // Other users - request approval
+              if(!user||user.isAnon){
+                showToast('প্রথমে লগইন করুন!','error');
+              }else{
+                showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
+                sendAdminRequest('Admin panel access request — correct password entered');
+                setMode('customer');
+                goto('home');
+              }
+            }
           }else showToast('ভুল পাসওয়ার্ড!','error');
         }}>লগইন</button>
         <button className="btn-outline mt-10" onClick={()=>{setMode('customer');goto('home');}}>← ফিরে যান</button>
@@ -1270,8 +1307,7 @@ function AppInner(){
             )}
           </div>
         )}
-
-        {/* CATEGORIES */}
+    {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
             <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
