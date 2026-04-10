@@ -8,7 +8,7 @@ import {
   getAuth, GoogleAuthProvider, signInWithPopup, getRedirectResult,
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInAnonymously, onAuthStateChanged, signOut, updateProfile,
-  sendEmailVerification, sendPasswordResetEmail, linkWithPopup
+  sendEmailVerification, sendPasswordResetEmail, linkWithPopup, signInWithRedirect
 } from "firebase/auth";
 import './App.css';
 
@@ -185,6 +185,22 @@ function AppInner(){
 
   // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(()=>{
+    // Google redirect result check করুন
+    getRedirectResult(auth)
+      .then((result)=>{
+        if(result?.user){
+          showToast('গুগল লগইন সফল! ✅','success');
+          setAuthMode('choice');
+          goto('home');
+        }
+      })
+      .catch((error)=>{
+        const code=error?.code||'';
+        if(code!=='auth/no-redirect-client-id'){
+          console.error('Redirect error:',code);
+        }
+      });
+
     loadProducts();
     loadSettings();
     loadAdmins();
@@ -201,12 +217,36 @@ function AppInner(){
             setUser({id:cu.uid,isAnon:false,email:cu.email,name:cu.displayName,emailVerified:cu.emailVerified});
             loadUserData(cu.uid);
             subscribeToUserOrders(cu.uid);
+            
+            // ──────── Admin Status Check (Logout সমস্যার সমাধান) ────────
+            // User authenticate হলে immediately Firestore এ admin status check করুন
+            (async()=>{
+              try{
+                const adminDoc=await getDoc(doc(db,'Admins',cu.uid));
+                if(adminDoc.exists()){
+                  // Admin আছে - role সেট করুন
+                  const role=adminDoc.data().role;
+                  setAdminRole(role);
+                  localStorage.setItem('sakib_admin_role',role);
+                  localStorage.setItem('sakib_admin_uid',cu.uid);
+                }else{
+                  // Admin নেই - clear করুন
+                  setAdminRole(null);
+                  localStorage.removeItem('sakib_admin_role');
+                  localStorage.removeItem('sakib_admin_uid');
+                }
+              }catch(e){console.error('Admin check:',e);}
+            })();
+            
             if(!cu.emailVerified&&cu.email){
               setVerifyBanner({msg:`📧 আপনার ইমেইল (${cu.email}) ভেরিফাই করুন। Spam ফোল্ডারও চেক করুন।`,type:'warn'});
             }else{setVerifyBanner(null);}
           }
         }else{
           setUser(null);setVerifyBanner(null);setApprovalStatus(null);
+          setAdminRole(null);
+          localStorage.removeItem('sakib_admin_role');
+          localStorage.removeItem('sakib_admin_uid');
           if(orderUnsubRef.current){orderUnsubRef.current();orderUnsubRef.current=null;}
         }
       }catch(e){console.error('auth state:',e);}
@@ -424,11 +464,9 @@ function AppInner(){
   const googleLogin=async()=>{
     setAuthLoading(true);
     try{
-      const r=await signInWithPopup(auth,gp);
-      if(r?.user){
-        showToast('গুগল লগইন সফল! ✅');
-        setAuthMode('choice');goto('home');
-      }
+      // Custom domain এ redirect method ব্যবহার করুন
+      await signInWithRedirect(auth,gp);
+      // Redirect হবে, page reload হবে এবং useEffect এ handle হবে
     }catch(e){
       const code=e?.code||'';
       if(code==='auth/unauthorized-domain')showToast('Firebase Authorized Domains-এ domain যোগ করুন','error');
@@ -436,8 +474,8 @@ function AppInner(){
       else if(code==='auth/cancelled-popup-request'||code==='auth/popup-closed-by-user'){}
       else if(code==='auth/network-request-failed')showToast('ইন্টারনেট সংযোগ নেই।','error');
       else showToast('লগইন সমস্যা: '+code,'error');
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
   };
 
   const emailLogin=async()=>{
@@ -750,28 +788,25 @@ function AppInner(){
         localStorage.setItem('sakib_admin_uid',user.id);
         showToast('Master Admin হিসেবে প্রবেশ করেছেন! 🎉','success');
       } else {
-        // অন্য users - Firestore এর Admins collection এ check করুন
-        try{
-          const adminDoc=await getDoc(doc(db,'Admins',user.id));
-          if(adminDoc.exists()){
-            // ইতিমধ্যে admin - সরাসরি ঢোকান (কোনো request লাগবে না)
-            setMode('admin');setAdminTab('orders');setAdminPass('');
-            const role=adminDoc.data().role;
-            setAdminRole(role);
-            localStorage.setItem('sakib_admin_role',role);
-            localStorage.setItem('sakib_admin_uid',user.id);
-            showToast('Admin Panel এ স্বাগতম! 🎉','success');
-          }else{
-            // নতুন user - request পাঠান
+        // অন্য users - localStorage এ role check করুন (useEffect এ set হয়েছে)
+        const savedRole=localStorage.getItem('sakib_admin_role');
+        if(savedRole){
+          // ইতিমধ্যে admin - সরাসরি ঢোকান (কোনো request লাগবে না)
+          setMode('admin');setAdminTab('orders');setAdminPass('');
+          setAdminRole(savedRole);
+          showToast('Admin Panel এ স্বাগতম! 🎉','success');
+        }else{
+          // নতুন user - request পাঠান
+          try{
             await sendAdminRequest('Admin panel access request — correct password entered');
-            showToast('Master Admin-এর কাছে অনুমতির জন্য অনুরোধ পাঠানো হয়েছে।','info');
+            showToast('Master Admin-এর অনুমতির জন্য request পাঠানো হয়েছে।','info');
             setMode('customer');
             goto('home');
             setAdminPass('');
+          }catch(e){
+            showToast('Request পাঠাতে সমস্যা: '+e.message,'error');
+            setAdminPass('');
           }
-        }catch(e){
-          showToast('সমস্যা হয়েছে: '+e.message,'error');
-          setAdminPass('');
         }
       }
     }else showToast('ভুল পাসওয়ার্ড!','error');
