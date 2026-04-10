@@ -258,15 +258,77 @@ function AppInner(){
       window.history.pushState(null,null,window.location.pathname);
       if(drawer){setDrawer(false);return;}
       setTabHist(prev=>{
-        if(prev.length>1){const n=[...prev];n.pop();setTab(n[n.length-1]);return n;}
+        if(prev.length>1){
+          const n=[...prev];
+          n.pop();
+          setTab(n[n.length-1]);
+          return n;
+        }
         const now=Date.now();
-        if(now-backTime.current<2000)window.close();
-        else{backTime.current=now;showToast('আবার Back চাপলে বের হবে','warning');}
+        if(now-backTime.current<1500){
+          // Double back - exit app
+          showToast('App থেকে বের হচ্ছেন...','info');
+          setTimeout(()=>{window.close();},500);
+        }else{
+          // Single back - show message
+          backTime.current=now;
+          showToast('পুনরায় Back চাপলে App বন্ধ হবে','warning');
+        }
         return prev;
       });
     };
     window.addEventListener('popstate',onPop);
-    return()=>{try{unsub();}catch(_){}if(orderUnsubRef.current)orderUnsubRef.current();window.removeEventListener('popstate',onPop);};
+    
+    // ──────── Pull-to-Refresh Functionality ────────
+    let touchStartY=0;
+    const onTouchStart=(e)=>{
+      touchStartY=e.touches[0].clientY;
+    };
+    const onTouchEnd=(e)=>{
+      const touchEndY=e.changedTouches[0].clientY;
+      if(touchEndY-touchStartY>100&&document.documentElement.scrollTop===0){
+        // Pull-to-refresh detected
+        showToast('ডাটা রিলোড হচ্ছে...','info');
+        loadProducts();
+        loadSettings();
+        loadAdmins();
+        if(user&&!user.isAnon){
+          loadUserData(user.id);
+          subscribeToUserOrders(user.id);
+        }
+        setTimeout(()=>{showToast('ডাটা রিলোড হয়েছে! ✅','success');},1000);
+      }
+    };
+    document.addEventListener('touchstart',onTouchStart,false);
+    document.addEventListener('touchend',onTouchEnd,false);
+    
+    // ──────── Offline/Online Handler ────────
+    const onOnline=()=>{
+      showToast('ইন্টারনেট সংযোগ পুনরায় অনলাইন হয়েছে ✅','success');
+      // Reload all data
+      loadProducts();
+      loadSettings();
+      loadAdmins();
+      if(user&&!user.isAnon){
+        loadUserData(user.id);
+        subscribeToUserOrders(user.id);
+      }
+    };
+    const onOffline=()=>{
+      showToast('ইন্টারনেট অফলাইন - ক্যাশড ডাটা দেখাচ্ছি','warning');
+    };
+    window.addEventListener('online',onOnline);
+    window.addEventListener('offline',onOffline);
+    
+    return()=>{
+      try{unsub();}catch(_){}
+      if(orderUnsubRef.current)orderUnsubRef.current();
+      window.removeEventListener('popstate',onPop);
+      document.removeEventListener('touchstart',onTouchStart);
+      document.removeEventListener('touchend',onTouchEnd);
+      window.removeEventListener('online',onOnline);
+      window.removeEventListener('offline',onOffline);
+    };
   // eslint-disable-next-line
   },[]);
 
@@ -340,9 +402,11 @@ function AppInner(){
   };
 
   const clearAdminSession=()=>{
-    setAdminRole(null);
-    localStorage.removeItem('sakib_admin_role');
-    localStorage.removeItem('sakib_admin_uid');
+    // Admin account থেকে logout না করে শুধু admin panel থেকে বের হয়
+    // localStorage এ admin role রয়ে যায় যাতে পরবর্তীবার password শুধু দিলেই ঢুকতে পারে
+    // setAdminRole(null);
+    // localStorage.removeItem('sakib_admin_role');
+    // localStorage.removeItem('sakib_admin_uid');
   };
 
   const addAdmin=async()=>{
@@ -833,8 +897,8 @@ function AppInner(){
       <header className="admin-header">
         <h2>অ্যাডমিন ড্যাশবোর্ড</h2>
         <button className="admin-back-btn" style={{marginLeft:'auto',background:'rgba(255,255,255,0.1)',fontSize:12}}
-          onClick={()=>{clearAdminSession();setMode('customer');goto('home');showToast('Admin logout হয়েছে।');}}>
-          🚪 লগআউট
+          onClick={()=>{clearAdminSession();setMode('customer');goto('home');showToast('Admin Panel থেকে লগআউট হয়েছেন।');}}>
+          🚪 Panel লগআউট
         </button>
       </header>
 
@@ -1431,6 +1495,9 @@ function AppInner(){
                     <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" alt="G" width="20"/>
                     {authLoading?'লোড হচ্ছে...':'Google দিয়ে লগইন'}
                   </button>
+                  <p style={{background:'#fff3cd',color:'#856404',padding:10,borderRadius:8,fontSize:12,marginBottom:10,border:'1px solid #ffc107',textAlign:'center'}}>
+                    ⚠️ Google লগইন সমস্যা হলে নিচে ইমেইল দিয়ে লগইন করুন
+                  </p>
                   <button className="btn-email mb-10" onClick={()=>setAuthMode('email-login')}>📧 ইমেইল দিয়ে লগইন</button>
                   <button className="btn-email-reg mb-10" onClick={()=>setAuthMode('email-register')}>✏️ নতুন অ্যাকাউন্ট তৈরি করুন</button>
                   <div className="divider">অথবা</div>
