@@ -2,12 +2,9 @@ name: Build Sakib Store Android App
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -34,21 +31,20 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
 
       - name: Install System Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: Install Dependencies
-        run: |
-          npm install
+      - name: Install NPM Dependencies
+        run: npm install --legacy-peer-deps
 
       - name: Build Web App
         run: npm run build
 
-      - name: Setup Capacitor
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      - name: Setup Capacitor Android
         run: |
           npx cap add android || npx cap add android --web-dir=build
-          npx cap copy
           npx cap sync android
 
       - name: Generate App Icons
@@ -87,6 +83,8 @@ jobs:
               -extent ${size}x${size} \
               "$RES_DIR/$folder/ic_launcher_round.png"
           done
+          
+          echo "Icons generated"
 
       - name: Build Debug APK
         run: |
@@ -110,10 +108,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-APK-Build
+          name: SakibStore-APK
           path: android/app/build/outputs/
           retention-days: 30
 
       - name: Build Status
         if: success()
-        run: echo "Build Success!"
+        run: echo "Build Success - APK Ready"
