@@ -60,12 +60,8 @@ jobs:
           
           if [ ! -f "$LOGO" ]; then
             echo "Logo not found at $LOGO"
-            echo "Searching for logo file..."
-            find . -name "*Logopit*" -type f
             exit 1
           fi
-          
-          echo "Found logo at: $LOGO"
           
           declare -A sizes=(
             ["mipmap-ldpi"]="36"
@@ -93,26 +89,26 @@ jobs:
               -extent ${size}x${size} \
               "$RES_DIR/$folder/ic_launcher_round.png"
           done
-          
-          echo "Icons generated successfully"
 
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew clean
+          ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
         continue-on-error: true
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew clean
+          ./gradlew assembleRelease --stacktrace
 
       - name: Build Bundle
         continue-on-error: true
         run: |
           cd android
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --stacktrace
 
       - name: Upload Artifacts
         if: always()
