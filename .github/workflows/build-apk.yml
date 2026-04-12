@@ -1,63 +1,120 @@
-Name: Final Online Build Fix
-on: push 
+name: Build Sakib Store Android App
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  JAVA_VERSION: '21'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Source
-        uses: actions/checkout@v4 
 
-      - name: Setup Node
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
-          
+          node-version: ${{ env.NODE_VERSION }}
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21' 
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: 🛠️ Install Dependencies & Build Web
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y imagemagick
-          
-          npm install --save firebase --force
-          npm install --save-dev @capacitor/core @capacitor/cli @capacitor/android --force
-          npm install --force
-          
-          npm run build 
+      - name: Install System Tools
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
 
-      - name: 📱 Android Logo & Fix
+      - name: Install NPM Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Web App
+        run: npm run build
+
+      - name: Install Capacitor CLI
+        run: npm install -g @capacitor/cli
+
+      - name: Remove Old Android Folder
+        run: rm -rf android
+
+      - name: Setup Capacitor Android
         run: |
-          rm -rf android
           npx cap add android
-          
-          ICON_FILE="Logopit_1772536689111.png"
-          if [ -f "$ICON_FILE" ]; then
-            # মূল পরিবর্তন এখানে: লোগোর চারপাশে ৪০% স্বচ্ছ বর্ডার যুক্ত করা হয়েছে
-            convert "$ICON_FILE" -bordercolor none -border 40% padded_icon.png
-            
-            declare -a folders=("mipmap-mdpi" "mipmap-hdpi" "mipmap-xhdpi" "mipmap-xxhdpi" "mipmap-xxxhdpi")
-            for f in "${folders[@]}"; do
-              mkdir -p android/app/src/main/res/$f
-              cp padded_icon.png android/app/src/main/res/$f/ic_launcher.png
-              cp padded_icon.png android/app/src/main/res/$f/ic_launcher_round.png
-              cp padded_icon.png android/app/src/main/res/$f/ic_launcher_foreground.png
-            done
-          fi
-          npx cap sync android 
+          npx cap sync android
 
-      - name: 🏗️ Build APK
+      - name: Generate App Icons
+        run: |
+          LOGO="public/Logopit_1772536689111.png"
+          RES_DIR="android/app/src/main/res"
+          
+          if [ ! -f "$LOGO" ]; then
+            echo "Logo not found"
+            exit 1
+          fi
+          
+          declare -A sizes=(
+            ["mipmap-ldpi"]="36"
+            ["mipmap-mdpi"]="48"
+            ["mipmap-hdpi"]="72"
+            ["mipmap-xhdpi"]="96"
+            ["mipmap-xxhdpi"]="144"
+            ["mipmap-xxxhdpi"]="192"
+          )
+          
+          for folder in "${!sizes[@]}"; do
+            size=${sizes[$folder]}
+            mkdir -p "$RES_DIR/$folder"
+            
+            convert "$LOGO" \
+              -resize ${size}x${size} \
+              -gravity center \
+              -extent ${size}x${size} \
+              -quality 95 \
+              "$RES_DIR/$folder/ic_launcher.png"
+            
+            convert "$LOGO" \
+              -resize ${size}x${size} \
+              -gravity center \
+              -extent ${size}x${size} \
+              "$RES_DIR/$folder/ic_launcher_round.png"
+          done
+          
+          echo "Icons generated"
+
+      - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
-          
-      - name: 📥 Download Branded APK
+
+      - name: Build Release APK
+        continue-on-error: true
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Build Bundle
+        continue-on-error: true
+        run: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Upload Artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-Online-Fixed
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: SakibStore-APK
+          path: android/app/build/outputs/
+          retention-days: 30
+
+      - name: Build Status
+        if: success()
+        run: echo "Build Success - APK Ready"
