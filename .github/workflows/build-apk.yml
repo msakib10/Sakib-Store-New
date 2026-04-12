@@ -2,9 +2,12 @@ name: Build Sakib Store Android App
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - develop
   pull_request:
-    branches: [main]
+    branches:
+      - main
   workflow_dispatch:
 
 env:
@@ -16,51 +19,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ===== Step 1: Checkout =====
-      - name: 📥 Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      # ===== Step 2: Node Setup =====
-      - name: 📦 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
-      # ===== Step 3: Java Setup =====
-      - name: ☕ Setup Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: ${{ env.JAVA_VERSION }}
-          cache: 'gradle'
 
-      # ===== Step 4: Install Tools =====
-      - name: 🛠️ Install Dependencies
+      - name: Install System Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y imagemagick
-          npm ci
 
-      # ===== Step 5: Build Web =====
-      - name: 🏗️ Build Web App
+      - name: Install Dependencies
+        run: |
+          npm install
+
+      - name: Build Web App
         run: npm run build
 
-      # ===== Step 6: Setup Capacitor =====
-      - name: 📱 Setup Capacitor
+      - name: Setup Capacitor
         run: |
-          npx cap add android || true
+          npx cap add android || npx cap add android --web-dir=build
           npx cap copy
           npx cap sync android
 
-      # ===== Step7: Generate Icons =====
-      - name: 🎨 Generate App Icons
+      - name: Generate App Icons
         run: |
           LOGO="public/Logopit_1772536689111.png"
           RES_DIR="android/app/src/main/res"
           
           if [ ! -f "$LOGO" ]; then
-            echo "❌ Logo not found"
+            echo "Logo not found"
             exit 1
           fi
           
@@ -90,45 +87,33 @@ jobs:
               -extent ${size}x${size} \
               "$RES_DIR/$folder/ic_launcher_round.png"
           done
-          
-          echo "✅ Icons generated"
 
-      # ===== Step8: Build APK =====
-      - name: 🏗️ Build Debug APK
+      - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug -x lint
+          ./gradlew assembleDebug
 
-      # ===== Step9: Build Release APK =====
-      - name: 📦 Build Release APK
+      - name: Build Release APK
+        continue-on-error: true
         run: |
           cd android
-          ./gradlew assembleRelease -x lint -x test || true
+          ./gradlew assembleRelease
 
-      # ===== Step10: Build Bundle =====
-      - name: 📦 Build Release Bundle
+      - name: Build Bundle
+        continue-on-error: true
         run: |
           cd android
-          ./gradlew bundleRelease -x lint -x test || true
+          ./gradlew bundleRelease
 
-      # ===== Step11: Upload Artifacts =====
-      - name: 📥 Upload Build Artifacts
+      - name: Upload Artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SakibStore-APK-${{ github.run_number }}
-          path: |
-            android/app/build/outputs/apk/debug/
-            android/app/build/outputs/apk/release/
-            android/app/build/outputs/bundle/release/
+          name: SakibStore-APK-Build
+          path: android/app/build/outputs/
           retention-days: 30
 
-      # ===== Step12: Build Status =====
-      - name: ✅ Build Complete
+      - name: Build Status
         if: success()
-        run: echo "✅ Build completed successfully!"
-
-      - name: ❌ Build Failed
-        if: failure()
-        run: echo "❌ Build failed - check logs"
+        run: echo "Build Success!"
