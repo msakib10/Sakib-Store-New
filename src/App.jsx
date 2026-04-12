@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 import { initializeApp } from "firebase/app";
 import {
@@ -416,8 +417,7 @@ function AppInner(){
       showToast('Admin যোগ হয়েছে! ✅');setNewAdminUid('');setShowAddAdmin(false);loadAdmins();
     }catch(e){showToast('সমস্যা: '+e.message,'error');}
   };
-
-  const removeAdmin=async(uid,role)=>{
+const removeAdmin=async(uid,role)=>{
     if(role==='master'&&adminRole!=='master'){showToast('Master admin-কে remove করা যাবে না!','error');return;}
     if(!window.confirm('এই admin-কে সরাতে চান?'))return;
     try{await deleteDoc(doc(db,'Admins',uid));showToast('সরানো হয়েছে।');loadAdmins();}
@@ -1066,7 +1066,7 @@ function AppInner(){
               </div>
             )}
 
-            {/* Login Approval Requests */}
+  {/* Login Approval Requests */}
             {(adminRole==='master'||adminRole==='super_admin')&&(
               <div style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,padding:16,marginBottom:16}}>
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
@@ -1343,8 +1343,7 @@ function AppInner(){
           </div>
         </div>
       )}
-
-      {/* Drawer */}
+   {/* Drawer */}
       <div className={`drawer-overlay ${drawer?'active':''}`} onClick={()=>setDrawer(false)}/>
       <div className={`side-drawer ${drawer?'open':''}`}>
         <div className="drawer-head"><span>🌿 সাকিব স্টোর</span><button className="drawer-close" onClick={()=>setDrawer(false)}>✕</button></div>
