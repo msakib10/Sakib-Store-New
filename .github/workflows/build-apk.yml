@@ -42,6 +42,9 @@ jobs:
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
+      - name: Install Capacitor Android Package
+        run: npm install @capacitor/android
+
       - name: Remove Old Android Folder
         run: rm -rf android
 
