@@ -1173,11 +1173,6 @@ const removeAdmin=async(uid,role)=>{
           onClick={()=>{setMode('customer');goto('home');}}>
           <span>🏠</span><span style={{fontSize:10}}>হোম</span>
         </div>
-        <div className={`nav-icon ${adminTab==='about'?'active':''}`}
-          style={{color:adminTab==='about'?'#fff':'rgba(255,255,255,0.7)'}}
-          onClick={()=>setAdminTab('about')}>
-          <span>ℹ️</span><span style={{fontSize:10}}>তথ্য</span>
-        </div>
       </footer>
     </div>
   );
@@ -1575,8 +1570,8 @@ const removeAdmin=async(uid,role)=>{
             ):(
               <div className="profile-dashboard">
                 <div className="profile-header-box">
-                  <div className="cover-photo" style={coverStyle}>
-                    <button className="cover-change-btn" onClick={()=>{loadSettings();setShowCoverPicker(true);}}>🖼️ কভার পরিবর্তন</button>
+                  <div className="cover-photo" style={{...coverStyle, cursor:'pointer'}} onClick={()=>{loadSettings();setShowCoverPicker(true);}}>
+                    <button className="cover-change-btn" onClick={e=>{e.stopPropagation();loadSettings();setShowCoverPicker(true);}}>🖼️ কভার পরিবর্তন</button>
                   </div>
                   <div className="avatar-section">
                     <div className="avatar-emoji" onClick={()=>setShowEmojiPicker(true)}>
@@ -1712,7 +1707,7 @@ const removeAdmin=async(uid,role)=>{
         {adminRole&&(
           <div className={`nav-icon ${mode==='admin'?'active':''}`}
             style={{color:mode==='admin'?'var(--green)':'#e74c3c'}}
-            onClick={()=>{setMode('admin');setAdminTab('stock');loadAdmins();if(adminRole==='master'||adminRole==='super_admin')loadAdminRequests();}}>
+            onClick={()=>{setMode('admin');setAdminTab('orders');fetchOrders();loadAdmins();if(adminRole==='master'||adminRole==='super_admin')loadAdminRequests();}}>
             <span>🛡️</span>
             <span style={{fontSize:10,fontWeight:700}}>প্যানেল</span>
           </div>
