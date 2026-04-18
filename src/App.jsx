@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, Component } from 'react';
 import { initializeApp } from "firebase/app";
 import {
@@ -46,11 +45,11 @@ const gp = new GoogleAuthProvider();
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 const MASTER_ADMIN_EMAIL = "admin10sakibstore@gmail.com";
-const CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
+const DEFAULT_CATS=['সব পণ্য','পাইকারি','চাল','ডাল','তেল','মসলা','পানীয়','অন্যান্য'];
 const DLOCS=["গোবিন্দল","সিংগাইর বাজার","নীলটেক","পুকুরপাড়া","ঘোনাপাড়া","বকচর","সিংগাইর উপজেলার ভেতরে","নিজে লেখুন"];
 const EMOJIS=['👨','👩','👦','👧','🧔','👱','👴','👵','🧑','👮','👷','🧑‍🌾','🧑‍🍳','🧑‍💼','🦸','😊','😎','🥳','🤩','🐱','🐶','🦊','🐼','🐨','🦁','🐯','🦄','🐸','🌟','🎯','🚀','🎵','🌈'];
 const DEFAULT_COVERS=['linear-gradient(135deg,#1a7a43,#27ae60)','linear-gradient(135deg,#0f3460,#16213e)','linear-gradient(135deg,#8e44ad,#6c3483)','linear-gradient(135deg,#e67e22,#d35400)','linear-gradient(135deg,#2980b9,#1a5276)','linear-gradient(135deg,#16a085,#1abc9c)'];
-const DEFINFO={name:'',phone:'',locationType:'গোবিন্দল',district:'মানিকগঞ্জ',area:'সিংগাইর',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
+const DEFINFO={name:'',phone:'',locationType:'',district:'',area:'',address:'',paymentMethod:'Cash on Delivery',senderNumber:'',transactionId:'',profileEmoji:'👤',coverPhoto:'',coverGradient:'linear-gradient(135deg,#1a7a43,#27ae60)'};
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const parseUnit=u=>{
@@ -147,7 +146,11 @@ function AppInner(){
   const [adminTab,setAdminTab]=useState('orders');
   const [adminStockTab,setAdminStockTab]=useState('settings'); // settings=বামে, stock=ডানে
   const [editId,setEditId]=useState(null);
-  const [newP,setNewP]=useState({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});
+  const [newP,setNewP]=useState({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি',aliases:''});
+  const [categories,setCategories]=useState(DEFAULT_CATS);
+  const [newCatInput,setNewCatInput]=useState('');
+  const [editCatIdx,setEditCatIdx]=useState(null);
+  const [editCatVal,setEditCatVal]=useState('');
   const [newNotif,setNewNotif]=useState({text:'',durationMins:60});
   const [newCoverUrl,setNewCoverUrl]=useState('');
 
@@ -194,12 +197,15 @@ function AppInner(){
           setAuthMode('choice');
           goto('home');
         }
+        setAuthLoading(false);
       })
       .catch((error)=>{
         const code=error?.code||'';
         if(code!=='auth/no-redirect-client-id'){
           console.error('Redirect error:',code);
+          if(code==='auth/unauthorized-domain')showToast('Google লগইন সফল হয়নি। ইমেইল দিয়ে লগইন করুন।','error');
         }
+        setAuthLoading(false);
       });
 
     loadProducts();
@@ -209,10 +215,12 @@ function AppInner(){
     const unsub=onAuthStateChanged(auth,cu=>{
       try{
         if(cu){
+
           if(cu.isAnonymous){
             // Guest user - load their orders by guestId
             setUser({id:cu.uid,isAnon:true,email:null,name:null,emailVerified:false,guestId});
-            subscribeToGuestOrders(guestId);
+            subscribeToGuestOrders(cu.uid);
+
             try{const d=localStorage.getItem('guestInfo');if(d)setInfo(p=>({...DEFINFO,...p,...JSON.parse(d)}));}catch(_){}
           }else{
             setUser({id:cu.uid,isAnon:false,email:cu.email,name:cu.displayName,emailVerified:cu.emailVerified});
@@ -382,6 +390,7 @@ function AppInner(){
         if(Array.isArray(d.notifications)){setNotifications(d.notifications.filter(n=>now<=n.expiresAt));}
         else if(d.notification&&now<=d.notification.expiresAt){setNotifications([d.notification]);}
         if(Array.isArray(d.coverPhotos)&&d.coverPhotos.length>0){setCoverPhotos(d.coverPhotos);}
+        if(Array.isArray(d.categories)&&d.categories.length>0){setCategories(d.categories);}
       }
     }catch(e){console.error('loadSettings',e);}
   };
@@ -540,6 +549,8 @@ const removeAdmin=async(uid,role)=>{
       else showToast('লগইন সমস্যা: '+code,'error');
       setAuthLoading(false);
     }
+    // ৮ সেকেন্ড পরে loading reset — redirect ফেরত না আসলে আটকে না থাকে
+    setTimeout(()=>setAuthLoading(false),8000);
   };
 
   const emailLogin=async()=>{
@@ -680,27 +691,34 @@ const removeAdmin=async(uid,role)=>{
   const finalTotal=cartTotal+dCharge;
 
   const submitOrder=async()=>{
+    if(!user||user.isAnon){
+      showToast('অর্ডার করতে প্রোফাইল থেকে একাউন্ট খুলুন! 👤','error');
+      setTimeout(()=>goto('profile'),1500);
+      return;
+    }
     if(!info.name||!info.phone||!info.district||!info.area||!info.address)return showToast('ডেলিভারির সকল তথ্য দিন!','error');
     const loc=info.locationType==='নিজে লেখুন'?customLoc:info.locationType;
     if(info.locationType==='নিজে লেখুন'&&!customLoc)return showToast('জায়গার নাম লিখুন!','error');
     if((info.paymentMethod==='Bkash'||info.paymentMethod==='Nogod')&&(!info.senderNumber||!info.transactionId))return showToast('সেন্ডার নম্বর ও TrxID দিন!','error');
-    // Use guestId for anonymous users, actual uid for logged in
-    const userId=user?.isAnon?guestId:(user?.id||guestId);
+    const userId=user.id;
     try{
       await addDoc(collection(db,'orders'),{
-        items:cart,userInfo:{...info,finalLocation:loc},
+        items:cart,
+        userInfo:{...info,finalLocation:loc},
         userId,
-        paymentMethod:info.paymentMethod,total:finalTotal,
+        paymentMethod:info.paymentMethod,
+        total:finalTotal,
         status:'Pending',
         date:new Date().toLocaleString('bn-BD'),
         timestamp:Date.now(),
-        cancelledByCustomer:false
+        cancelledByCustomer:false,
+        createdAt:new Date().toISOString()
       });
       for(const item of cart){
         const{baseQty}=parseUnit(item.unit);
         try{await updateDoc(doc(db,'products',item.id),{stock:Math.max(0,item.stock-item.qty/baseQty)});}catch(_){}
       }
-      if(user&&!user.isAnon)await setDoc(doc(db,'users',user.id),{info},{merge:true});
+      await setDoc(doc(db,'users',user.id),{info},{merge:true});
       showToast('অর্ডার সফল! 🎉');setCart([]);loadProducts();goto('profile');
     }catch(e){showToast('সমস্যা: '+(e?.message||''),'error');}
   };
@@ -785,8 +803,42 @@ const removeAdmin=async(uid,role)=>{
   };
 
   const saveSettings=async()=>{
-    try{await setDoc(doc(db,'settings','general'),{header:headerImg,notice},{merge:true});showToast('সেটিংস সেভ! ✅');}
+    try{await setDoc(doc(db,'settings','general'),{header:headerImg,notice,categories},{merge:true});showToast('সেটিংস সেভ! ✅');}
     catch(e){showToast('সমস্যা','error');}
+  };
+
+  const saveCategoriesToFirestore=async(cats)=>{
+    try{await setDoc(doc(db,'settings','general'),{categories:cats},{merge:true});}
+    catch(e){showToast('ক্যাটাগরি সেভ সমস্যা','error');}
+  };
+
+  const addCategory=async()=>{
+    const val=newCatInput.trim();
+    if(!val)return showToast('ক্যাটাগরির নাম লিখুন!','error');
+    if(categories.includes(val))return showToast('এই নাম আগে থেকেই আছে!','error');
+    const updated=[...categories,val];
+    setCategories(updated);setNewCatInput('');
+    await saveCategoriesToFirestore(updated);
+    showToast('ক্যাটাগরি যোগ হয়েছে! ✅');
+  };
+
+  const updateCategory=async(idx,newVal)=>{
+    const val=newVal.trim();
+    if(!val)return showToast('নাম খালি রাখা যাবে না!','error');
+    if(idx===0)return showToast('"সব পণ্য" পরিবর্তন করা যাবে না!','error');
+    const updated=categories.map((c,i)=>i===idx?val:c);
+    setCategories(updated);setEditCatIdx(null);setEditCatVal('');
+    await saveCategoriesToFirestore(updated);
+    showToast('ক্যাটাগরি আপডেট হয়েছে! ✅');
+  };
+
+  const deleteCategory=async(idx)=>{
+    if(idx===0)return showToast('"সব পণ্য" মুছে ফেলা যাবে না!','error');
+    if(!window.confirm(`"${categories[idx]}" ক্যাটাগরি মুছে ফেলবেন?`))return;
+    const updated=categories.filter((_,i)=>i!==idx);
+    setCategories(updated);
+    await saveCategoriesToFirestore(updated);
+    showToast('ক্যাটাগরি মুছে ফেলা হয়েছে।');
   };
 
   const addCoverPhoto=async()=>{
@@ -802,7 +854,14 @@ const removeAdmin=async(uid,role)=>{
     try{await setDoc(doc(db,'settings','general'),{coverPhotos:updated},{merge:true});showToast('মুছে ফেলা হয়েছে।');}catch(_){}
   };
 
-  const filtered=products.filter(p=>{const c=homeCat==='সব পণ্য'||p.category===homeCat;const s=!search||p.name.toLowerCase().includes(search.toLowerCase());return c&&s;});
+  const filtered=products.filter(p=>{
+    const c=homeCat==='সব পণ্য'||p.category===homeCat;
+    if(!search)return c;
+    const q=search.toLowerCase();
+    const nameMatch=p.name.toLowerCase().includes(q);
+    const aliasMatch=p.aliases&&String(p.aliases).split(',').some(a=>a.trim().toLowerCase().includes(q));
+    return c&&(nameMatch||aliasMatch);
+  });
   const isHome=tab==='home';
   const activeNotifs=notifications.filter(n=>Date.now()<=n.expiresAt);
 
@@ -1002,14 +1061,15 @@ const removeAdmin=async(uid,role)=>{
                 <input type="text" placeholder="পরিমাণ (১ কেজি...)" value={newP.unit} onChange={e=>setNewP({...newP,unit:e.target.value})}/>
               </div>
               <div style={{display:'flex',gap:8,marginBottom:10}}>
-                <select value={newP.category} onChange={e=>setNewP({...newP,category:e.target.value})}>{CATS.filter(c=>c!=='সব পণ্য').map(c=><option key={c}>{c}</option>)}</select>
+                <select value={newP.category} onChange={e=>setNewP({...newP,category:e.target.value})}>{categories.filter(c=>c!=='সব পণ্য').map(c=><option key={c}>{c}</option>)}</select>
                 <input type="number" placeholder="স্টক" value={newP.stock} onChange={e=>setNewP({...newP,stock:e.target.value})}/>
               </div>
               <input type="text" placeholder="ছবির URL" className="mb-10" value={newP.image} onChange={e=>setNewP({...newP,image:e.target.value})}/>
               {newP.image&&<img src={newP.image} alt="" style={{width:'100%',height:60,objectFit:'cover',borderRadius:8,marginBottom:8}} onError={e=>{e.target.style.display='none';}}/>}
+              <input type="text" placeholder="অন্য নাম / ইংরেজি নাম (কমা দিয়ে লিখুন, যেমন: Rice, চাউল)" className="mb-10" value={newP.aliases||''} onChange={e=>setNewP({...newP,aliases:e.target.value})} title="এই নামগুলো দিয়ে সার্চ করলেও পণ্য খুঁজে পাওয়া যাবে"/>
               <div style={{display:'flex',gap:8}}>
                 <button className="btn-primary flex-1" onClick={saveProduct}>{editId?"আপডেট":"যোগ করুন"}</button>
-                {editId&&<button className="btn-danger" onClick={()=>{setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি'});}}>বাতিল</button>}
+                {editId&&<button className="btn-danger" onClick={()=>{setEditId(null);setNewP({name:'',price:'',image:'',category:'পাইকারি',stock:100,unit:'১ কেজি',aliases:''});}}>বাতিল</button>}
               </div>
             </div>
             <h3 className="section-title mt-10">স্টক লিস্ট ({products.length}টি)</h3>
@@ -1018,7 +1078,7 @@ const removeAdmin=async(uid,role)=>{
                 <div key={p.id} className="stock-item-row">
                   <img src={p.image||'https://placehold.co/50x50/27ae60/fff?text=P'} alt={p.name} onError={e=>{e.target.src='https://placehold.co/50x50/27ae60/fff?text=P';}}/>
                   <div className="si-details"><strong>{p.name}</strong><p>৳{p.price}/{p.unit} | স্টক: <span style={{color:p.stock<=5?'#dc2626':'inherit',fontWeight:700}}>{p.stock}</span></p></div>
-                  <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP({...p,price:String(p.price),stock:String(p.stock)});window.scrollTo(0,0);}}>Edit</button>
+                  <button className="btn-edit" onClick={()=>{setEditId(p.id);setNewP({...p,price:String(p.price),stock:String(p.stock),aliases:p.aliases||''});window.scrollTo(0,0);}}>Edit</button>
                   <button className="btn-del" onClick={async()=>{if(window.confirm("ডিলিট করবেন?")){try{await deleteDoc(doc(db,'products',p.id));loadProducts();}catch(e){showToast('সমস্যা','error');}}}}>Del</button>
                 </div>
               ))}
@@ -1106,9 +1166,40 @@ const removeAdmin=async(uid,role)=>{
               </div>
             )}
 
-            {/* Settings */}
-            <div className="admin-card" style={{marginBottom:12}}>
-              <h4>🖼️ হেডার ছবি (URL)</h4>
+            {/* Category Management */}
+            <div style={{background:'#fff',border:'1.5px solid #e5e7eb',borderRadius:12,padding:16,marginBottom:16}}>
+              <h3 style={{color:'var(--green-dk)',fontSize:15,fontWeight:700,marginBottom:12}}>🗂️ ক্যাটাগরি ম্যানেজমেন্ট</h3>
+              <div style={{display:'flex',gap:8,marginBottom:12}}>
+                <input type="text" placeholder="নতুন ক্যাটাগরির নাম..." value={newCatInput} onChange={e=>setNewCatInput(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter')addCategory();}}
+                  style={{flex:1,padding:'8px 12px',border:'1.5px solid var(--border)',borderRadius:9,fontFamily:'var(--font)',fontSize:13,background:'var(--green-pale)',outline:'none'}}/>
+                <button className="btn-primary" style={{width:'auto',padding:'8px 14px'}} onClick={addCategory}>+ যোগ</button>
+              </div>
+              {categories.map((cat,idx)=>(
+                <div key={idx} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid #f0f0f0'}}>
+                  {editCatIdx===idx?(
+                    <>
+                      <input type="text" value={editCatVal} onChange={e=>setEditCatVal(e.target.value)}
+                        onKeyDown={e=>{if(e.key==='Enter')updateCategory(idx,editCatVal);if(e.key==='Escape'){setEditCatIdx(null);setEditCatVal('');}}}
+                        style={{flex:1,padding:'6px 10px',border:'1.5px solid var(--green)',borderRadius:8,fontFamily:'var(--font)',fontSize:13,outline:'none'}} autoFocus/>
+                      <button onClick={()=>updateCategory(idx,editCatVal)} style={{background:'#10b981',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer'}}>✅</button>
+                      <button onClick={()=>{setEditCatIdx(null);setEditCatVal('');}} style={{background:'#6b7280',color:'#fff',border:'none',padding:'5px 10px',borderRadius:7,fontSize:12,cursor:'pointer'}}>✕</button>
+                    </>
+                  ):(
+                    <>
+                      <span style={{flex:1,fontSize:13,fontWeight:idx===0?700:400,color:idx===0?'var(--green)':'#374151'}}>
+                        {idx===0?'📦':''} {cat}
+                        {idx===0&&<span style={{fontSize:10,color:'var(--muted)',marginLeft:4}}>(ডিফল্ট)</span>}
+                      </span>
+                      {idx!==0&&<>
+                        <button onClick={()=>{setEditCatIdx(idx);setEditCatVal(cat);}} style={{background:'#eff6ff',color:'#3b82f6',border:'none',padding:'5px 10px',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer'}}>✏️</button>
+                        <button onClick={()=>deleteCategory(idx)} style={{background:'#fee2e2',color:'#dc2626',border:'none',padding:'5px 10px',borderRadius:7,fontSize:12,fontWeight:700,cursor:'pointer'}}>🗑️</button>
+                      </>}
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
               <input type="text" placeholder="ছবির লিঙ্ক..." value={headerImg} onChange={e=>setHeaderImg(e.target.value)}/>
               {headerImg&&<img src={headerImg} alt="preview" style={{width:'100%',height:70,objectFit:'cover',borderRadius:8,marginTop:8}} onError={e=>{e.target.style.display='none';}}/>}
               <h4 className="mt-15">📢 চলমান নোটিশ</h4>
@@ -1185,7 +1276,6 @@ const removeAdmin=async(uid,role)=>{
   return(
     <div className="app-container">
       {toast&&<div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
-
 
       {/* Email Verification Banner */}
       {verifyBanner&&(
@@ -1385,7 +1475,7 @@ const removeAdmin=async(uid,role)=>{
               {search&&<button className="search-clear" onClick={()=>setSearch('')}>✕</button>}
             </div>
             <div className="horizontal-categories">
-              {CATS.map(c=><button key={c} className={`cat-pill ${homeCat===c?'active':''}`} onClick={()=>{setHomeCat(c);setSearch('');}}>{c}</button>)}
+              {categories.map(c=><button key={c} className={`cat-pill ${homeCat===c?'active':''}`} onClick={()=>{setHomeCat(c);setSearch('');}}>{c}</button>)}
             </div>
             {filtered.length===0?(
               <div className="empty-state text-center mt-30">
@@ -1402,7 +1492,7 @@ const removeAdmin=async(uid,role)=>{
         {/* CATEGORIES */}
         {tab==='categories'&&(
           <div className="page-categories">
-            <div className="cat-sidebar">{CATS.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
+            <div className="cat-sidebar">{categories.map(c=><div key={c} className={`cat-side-item ${catSel===c?'active':''}`} onClick={()=>setCatSel(c)}>{c}</div>)}</div>
             <div className="cat-content">
               <h3 className="cat-title">{catSel}</h3>
               <div className="product-grid-2">{products.filter(p=>catSel==='সব পণ্য'||p.category===catSel).map(p=><PCard key={p.id} p={p}/>)}</div>
