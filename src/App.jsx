@@ -1200,6 +1200,8 @@ const removeAdmin=async(uid,role)=>{
                 </div>
               ))}
             </div>
+            <div className="admin-card" style={{marginBottom:12}}>
+              <h4>🖼️ হেডার ছবি (URL)</h4>
               <input type="text" placeholder="ছবির লিঙ্ক..." value={headerImg} onChange={e=>setHeaderImg(e.target.value)}/>
               {headerImg&&<img src={headerImg} alt="preview" style={{width:'100%',height:70,objectFit:'cover',borderRadius:8,marginTop:8}} onError={e=>{e.target.style.display='none';}}/>}
               <h4 className="mt-15">📢 চলমান নোটিশ</h4>
