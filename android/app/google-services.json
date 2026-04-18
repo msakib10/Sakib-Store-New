@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "514373347826",
+    "firebase_url": "https://sakib-store1-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "sakib-store1",
+    "storage_bucket": "sakib-store1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:514373347826:android:15249112b6f64b49d1636b",
+        "android_client_info": {
+          "package_name": "com.sakib.store"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "514373347826-m1sco7k8p21l4spl4ilij3qpdojr4h88.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sakib.store",
+            "certificate_hash": "4f39313998e4af5c8ec756649c16919b5e063d3a"
+          }
+        },
+        {
+          "client_id": "514373347826-jh7pnqp376gbad764kvss94b7jlbe9la.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQgnk3AD9YCjDsk97ZsywZ7_047o-srcg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "514373347826-jh7pnqp376gbad764kvss94b7jlbe9la.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
